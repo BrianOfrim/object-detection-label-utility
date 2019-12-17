@@ -2,6 +2,7 @@ import os
 import sys
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import matplotlib.lines as mlines
 import numpy as np
 import matplotlib.image as mpimg
 from dataclasses import dataclass
@@ -57,6 +58,34 @@ def removeInclompleteBoxes(bboxes):
         if bbox.corner2 is None:
             bboxes.remove(bbox)
 
+def displayImage(path):
+    # Load and show the new image
+    img = mpimg.imread(path)
+    plt.imshow(img)
+    # Update the title
+    plt.title(path.split('/')[-1])
+    # Redraw the figure
+    plt.gcf().canvas.draw()
+
+def clearAllLines():
+     [l.remove() for l in reversed(plt.gca().lines)]
+
+
+def drawCorner1Lines(bboxCorner):
+    ax = plt.gca()
+    
+    xmin, xmax = ax.get_xbound()
+    ymin, ymax = ax.get_ybound()
+    
+    vLine = mlines.Line2D([bboxCorner.x ,bboxCorner.x], [ymin,ymax], linestyle='dashed')
+    hLine = mlines.Line2D([xmin,xmax], [bboxCorner.y ,bboxCorner.y], linestyle='dashed')
+
+    ax.add_line(vLine)
+    ax.add_line(hLine)
+
+    plt.gcf().canvas.draw()
+
+
 def keypress(event):
     global current_image_index
     print('press', event.key)
@@ -64,21 +93,22 @@ def keypress(event):
     if event.key == 'd':
         print('Next')
         removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
+        clearAllLines()
         current_image_index += 1
-        img = mpimg.imread(input_images[current_image_index].path)
+        displayImage(input_images[current_image_index].path)
         draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
-        plt.imshow(img)
     elif event.key == 'a':
+        clearAllLines()
         if (current_image_index == 0):
             print('Already at the start')
         else:
             print('Previous')
             removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
             current_image_index -= 1
-            img = mpimg.imread(input_images[current_image_index].path)
+            displayImage(input_images[current_image_index].path)
             draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
-            plt.imshow(img)
     elif event.key == 'w':
+        clearAllLines()
         removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
         if(len(input_images[current_image_index].boundingBoxes) == 0):
             print('No more bounding boxes to clear')
@@ -98,17 +128,19 @@ def onclick(event):
     # get the current bounding box list
     bboxes = input_images[current_image_index].boundingBoxes
     if(len(bboxes) > 0 and bboxes[-1].corner2 is None):
+        clearAllLines()
         bboxes[-1].corner2 = BBoxCorner(math.floor(event.xdata),
             math.floor(event.ydata))
         draw_bounding_boxes(bboxes)    
     else:
         bboxes.append(BBox(BBoxCorner(
             math.floor(event.xdata), math.floor(event.ydata)), None))
-
+        drawCorner1Lines(bboxes[-1].corner1)
 
 def main(unused_argv):
-
     fig, ax = plt.subplots()
+    fig.canvas.set_window_title('Label')
+
     # read in the names of the images to label
     for image_file in os.listdir(flags.FLAGS.input_image_dir):
         if image_file.endswith(".jpg"):
@@ -119,13 +151,11 @@ def main(unused_argv):
     cid_keypress = fig.canvas.mpl_connect('key_press_event', keypress)
     
     if(len(input_images) > 0):
-        img = mpimg.imread(input_images[current_image_index].path)
-        plt.imshow(img)
+        displayImage(input_images[current_image_index].path)
         plt.show()
+        print('Window closed')
     else:
         print('No input images to label were found') 
-
-    print('Window closed')
 
 if __name__ == "__main__":
   app.run(main)
