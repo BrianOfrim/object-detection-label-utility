@@ -20,12 +20,27 @@ class BBoxCorner:
 class BBox:
     corner1: BBoxCorner
     corner2: BBoxCorner
+    category_index: int 
 
 @dataclass
 class AnnotatedImage:
     path: str
     boundingBoxes: list
 
+@dataclass
+class Category:
+    data_name: str
+    color: tuple
+    keyboard_string: str
+
+item_categories = [
+    Category('trash', (23, 171, 245), '0'),
+    Category('aluminum', (237, 181, 14), '1'),
+    Category('compost', (219, 56, 210), '2'),
+    Category('glass', (255, 74, 164), '3'),
+    Category('paper', (230, 245, 24), '4'),
+    Category('plastic', (24, 230, 245), '5'),
+]
 
 flags.DEFINE_string(
     'input_image_dir',
@@ -33,6 +48,7 @@ flags.DEFINE_string(
     'Location of the image files to lable.'
 )
 
+current_category_index = 0
 input_images = []
 current_image_index = 0
 
@@ -46,8 +62,10 @@ def draw_bounding_boxes(bboxes):
         height = bbox.corner2.y - bbox.corner1.y 
         width = bbox.corner2.x - bbox.corner1.x
         lower_left = (bbox.corner1.x, bbox.corner1.y)
+        item_categories[bbox.category_index].color
+        color = tuple(x / 255.0 for x in item_categories[bbox.category_index].color)
         rect = patches.Rectangle(lower_left, width, height,
-                linewidth=1,edgecolor='r',facecolor='none')
+                linewidth=2,edgecolor=color,facecolor='none')
         plt.gca().add_patch(rect)
     
     plt.gcf().canvas.draw()
@@ -90,8 +108,8 @@ def drawCorner1Lines(bboxCorner):
 
 def keypress(event):
     global current_image_index
+    global current_category_index
     print('press', event.key)
-    sys.stdout.flush()
     if event.key == 'd':
         print('Next')
         removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
@@ -120,8 +138,12 @@ def keypress(event):
             input_images[current_image_index].boundingBoxes.pop()
         removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
         draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
-    else:
-        print('Undefined user input')
+
+    for category_index, catagory in enumerate(item_categories):
+        if event.key == catagory.keyboard_string:
+            current_category_index = category_index
+            print('Current catagory: %s' % 
+                    item_categories[current_category_index].data_name)
     # Redraw the figure
     plt.gcf().canvas.draw()
 
@@ -140,7 +162,7 @@ def onclick(event):
         draw_bounding_boxes(bboxes)    
     else:
         bboxes.append(BBox(BBoxCorner(
-            math.floor(event.xdata), math.floor(event.ydata)), None))
+            math.floor(event.xdata), math.floor(event.ydata)), None, current_category_index))
         drawCorner1Lines(bboxes[-1].corner1)
 
 def main(unused_argv):
