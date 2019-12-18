@@ -77,8 +77,10 @@ def drawCorner1Lines(bboxCorner):
     xmin, xmax = ax.get_xbound()
     ymin, ymax = ax.get_ybound()
     
-    vLine = mlines.Line2D([bboxCorner.x ,bboxCorner.x], [ymin,ymax], linestyle='dashed')
-    hLine = mlines.Line2D([xmin,xmax], [bboxCorner.y ,bboxCorner.y], linestyle='dashed')
+    vLine = mlines.Line2D([bboxCorner.x ,bboxCorner.x],
+            [ymin,ymax], linestyle='dashed')
+    hLine = mlines.Line2D([xmin,xmax], 
+            [bboxCorner.y,bboxCorner.y], linestyle='dashed')
 
     ax.add_line(vLine)
     ax.add_line(hLine)
@@ -107,15 +109,19 @@ def keypress(event):
             current_image_index -= 1
             displayImage(input_images[current_image_index].path)
             draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
-    elif event.key == 'w':
+    elif event.key == 'w' or event.key == 'escape':
         clearAllLines()
-        removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
         if(len(input_images[current_image_index].boundingBoxes) == 0):
             print('No more bounding boxes to clear')
+        elif input_images[current_image_index].boundingBoxes[-1].corner2 is None:
+            print('Remove corner 1 guidelines')
         else:
             print('Remove latest bounding box')
             input_images[current_image_index].boundingBoxes.pop()
-            draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
+        removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
+        draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
+    else:
+        print('Undefined user input')
     # Redraw the figure
     plt.gcf().canvas.draw()
 
