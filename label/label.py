@@ -1,10 +1,11 @@
 import os
 import sys
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.lines as mlines
-import numpy as np
 import matplotlib.image as mpimg
+from matplotlib.widgets import Button
 from dataclasses import dataclass
 import math
 from absl import app
@@ -27,11 +28,15 @@ class AnnotatedImage:
     path: str
     boundingBoxes: list
 
-@dataclass
 class Category:
-    data_name: str
-    color: tuple
-    keyboard_string: str
+    def __init__(self, data_name, color, keyboard_string):
+        self.data_name = data_name
+        self.color = color
+        self.keyboard_string = keyboard_string
+        self.ax = None
+        self.button = None
+    def selected(self, event):
+        print('Button pushed: %s' % self.data_name)
 
 item_categories = [
     Category('trash', (23, 171, 245), '0'),
@@ -52,10 +57,39 @@ current_category_index = 0
 input_images = []
 current_image_index = 0
 
+fig, im_ax = plt.subplots()
+fig.canvas.set_window_title('Label')
+
+
+
+def normalize_color(rgbColor):
+    return tuple(x / 255.0 for x in rgbColor)
+
+
+def next_image(event):
+    global current_image_index
+    print('Next')
+    removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
+    clearAllLines()
+    current_image_index += 1
+    displayImage(input_images[current_image_index].path)
+    draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
+
+def prev_image(event):
+    global current_image_index
+    clearAllLines()
+    if (current_image_index == 0):
+        print('Already at the start')
+    else:
+        print('Previous')
+        removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
+        current_image_index -= 1
+        displayImage(input_images[current_image_index].path)
+        draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
 
 def draw_bounding_boxes(bboxes):
     # clear all current boxes
-    [p.remove() for p in reversed(plt.gca().patches)]
+    [p.remove() for p in reversed(im_ax.patches)]
     
     # redraw the boxes
     for bbox in bboxes:
@@ -63,12 +97,12 @@ def draw_bounding_boxes(bboxes):
         width = bbox.corner2.x - bbox.corner1.x
         lower_left = (bbox.corner1.x, bbox.corner1.y)
         item_categories[bbox.category_index].color
-        color = tuple(x / 255.0 for x in item_categories[bbox.category_index].color)
+        color = normalize_color(item_categories[bbox.category_index].color)
         rect = patches.Rectangle(lower_left, width, height,
                 linewidth=2,edgecolor=color,facecolor='none')
-        plt.gca().add_patch(rect)
+        im_ax.add_patch(rect)
     
-    plt.gcf().canvas.draw()
+    fig.canvas.draw()
 
 def removeInclompleteBoxes(bboxes):
     # Clear last bbox if it is incomplete
@@ -79,54 +113,37 @@ def removeInclompleteBoxes(bboxes):
 def displayImage(path):
     # Load and show the new image
     img = mpimg.imread(path)
-    plt.imshow(img)
+    im_ax.imshow(img)
     # Update the title
-    plt.title(path.split('/')[-1])
+    im_ax.set_title(path.split('/')[-1])
     # Redraw the figure
-    plt.gcf().canvas.draw()
+    fig.canvas.draw()
 
 def clearAllLines():
-     [l.remove() for l in reversed(plt.gca().lines)]
-
+     [l.remove() for l in reversed(im_ax.lines)]
 
 def drawCorner1Lines(bboxCorner):
-    ax = plt.gca()
-    
-    xmin, xmax = ax.get_xbound()
-    ymin, ymax = ax.get_ybound()
+    xmin, xmax = im_ax.get_xbound()
+    ymin, ymax = im_ax.get_ybound()
     
     vLine = mlines.Line2D([bboxCorner.x ,bboxCorner.x],
             [ymin,ymax], linestyle='dashed')
     hLine = mlines.Line2D([xmin,xmax], 
             [bboxCorner.y,bboxCorner.y], linestyle='dashed')
 
-    ax.add_line(vLine)
-    ax.add_line(hLine)
+    im_ax.add_line(vLine)
+    im_ax.add_line(hLine)
 
-    plt.gcf().canvas.draw()
+    fig.canvas.draw()
 
 
 def keypress(event):
-    global current_image_index
     global current_category_index
     print('press', event.key)
     if event.key == 'd':
-        print('Next')
-        removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
-        clearAllLines()
-        current_image_index += 1
-        displayImage(input_images[current_image_index].path)
-        draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
+        next_image(event)
     elif event.key == 'a':
-        clearAllLines()
-        if (current_image_index == 0):
-            print('Already at the start')
-        else:
-            print('Previous')
-            removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
-            current_image_index -= 1
-            displayImage(input_images[current_image_index].path)
-            draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
+        prev_image(event)
     elif event.key == 'w' or event.key == 'escape':
         clearAllLines()
         if(len(input_images[current_image_index].boundingBoxes) == 0):
@@ -139,13 +156,13 @@ def keypress(event):
         removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
         draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
 
-    for category_index, catagory in enumerate(item_categories):
-        if event.key == catagory.keyboard_string:
+    for category_index, category in enumerate(item_categories):
+        if event.key == category.keyboard_string:
             current_category_index = category_index
-            print('Current catagory: %s' % 
+            print('Current category: %s' % 
                     item_categories[current_category_index].data_name)
     # Redraw the figure
-    plt.gcf().canvas.draw()
+    fig.canvas.draw()
 
 def onclick(event):
     # verify that the click was inbounds
@@ -166,17 +183,29 @@ def onclick(event):
         drawCorner1Lines(bboxes[-1].corner1)
 
 def main(unused_argv):
-    fig, ax = plt.subplots()
-    fig.canvas.set_window_title('Label')
-
     # read in the names of the images to label
     for image_file in os.listdir(flags.FLAGS.input_image_dir):
         if image_file.endswith(".jpg"):
             input_images.append(AnnotatedImage(
-                os.path.join( flags.FLAGS.input_image_dir, image_file), []))
+                os.path.join(flags.FLAGS.input_image_dir, image_file), []))
+
+    axprev = plt.axes([0.7, 0.05, 0.1, 0.075])
+    axnext = plt.axes([0.81, 0.05, 0.1, 0.075])
+    bnext = Button(axnext, 'Next')
+    bprev = Button(axprev, 'Previous')
 
     cid_onclick= fig.canvas.mpl_connect('button_press_event', onclick)
     cid_keypress = fig.canvas.mpl_connect('key_press_event', keypress)
+    
+    bprev.on_clicked(prev_image)
+    bnext.on_clicked(next_image)
+ 
+    for item_index, category_item in enumerate(item_categories):
+        category_item.ax = plt.axes([(item_index * 0.11) + 0.05, 0.05, 0.1, 0.075])
+        category_item.button = Button(category_item.ax, category_item.data_name,
+                color=normalize_color(category_item.color))
+        category_item.button.on_clicked(category_item.selected)
+
     
     if(len(input_images) > 0):
         displayImage(input_images[current_image_index].path)
