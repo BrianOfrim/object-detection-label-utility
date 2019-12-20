@@ -37,6 +37,16 @@ class Category:
         self.button = None
     def selected(self, event):
         print('Button pushed: %s' % self.data_name)
+        if(self.ax is not None):
+            self.ax.spines['left'].set_linewidth(2)
+            self.ax.spines['right'].set_linewidth(2)
+            self.ax.spines['top'].set_linewidth(2)
+            self.ax.spines['bottom'].set_linewidth(2)
+            
+            self.ax.spines['bottom'].set_color('green')
+            self.ax.spines['top'].set_color('green')
+            self.ax.spines['left'].set_color('green')
+            self.ax.spines['right'].set_color('green')
 
 item_categories = [
     Category('trash', (23, 171, 245), '0'),
@@ -57,10 +67,10 @@ current_category_index = 0
 input_images = []
 current_image_index = 0
 
-fig, im_ax = plt.subplots()
+fig = plt.figure()
 fig.canvas.set_window_title('Label')
 
-
+im_ax = plt.axes([0.075, 0.15, 0.85, 0.75])
 
 def normalize_color(rgbColor):
     return tuple(x / 255.0 for x in rgbColor)
@@ -189,10 +199,10 @@ def main(unused_argv):
             input_images.append(AnnotatedImage(
                 os.path.join(flags.FLAGS.input_image_dir, image_file), []))
 
-    axprev = plt.axes([0.7, 0.05, 0.1, 0.075])
-    axnext = plt.axes([0.81, 0.05, 0.1, 0.075])
+    axprev = plt.axes([0.8, 0.01, 0.085, 0.075])
+    axnext = plt.axes([0.9, 0.01, 0.085, 0.075])
+    bprev = Button(axprev, 'Prev')
     bnext = Button(axnext, 'Next')
-    bprev = Button(axprev, 'Previous')
 
     cid_onclick= fig.canvas.mpl_connect('button_press_event', onclick)
     cid_keypress = fig.canvas.mpl_connect('key_press_event', keypress)
@@ -201,10 +211,15 @@ def main(unused_argv):
     bnext.on_clicked(next_image)
  
     for item_index, category_item in enumerate(item_categories):
-        category_item.ax = plt.axes([(item_index * 0.11) + 0.05, 0.05, 0.1, 0.075])
+        category_item.ax = plt.axes([(item_index * 0.11) + 0.05, 0.01, 0.1, 0.075])
         category_item.button = Button(category_item.ax, category_item.data_name,
                 color=normalize_color(category_item.color))
         category_item.button.on_clicked(category_item.selected)
+        
+        category_item.ax.spines['left'].set_linewidth(None)
+        category_item.ax.spines['right'].set_linewidth(None)
+        category_item.ax.spines['top'].set_linewidth(None)
+        category_item.ax.spines['bottom'].set_linewidth(None)
 
     
     if(len(input_images) > 0):
