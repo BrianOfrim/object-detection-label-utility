@@ -175,10 +175,13 @@ def keypress(event):
     fig.canvas.draw()
 
 def onclick(event):
+    
     # verify that the click was inbounds
-    if event.xdata is None or event.ydata is None:
+    if event.inaxes is None or event.inaxes != im_ax or\
+            event.xdata is None or event.ydata is None:
         print('Invalid box corner')
         return
+
 
     # get the current bounding box list
     bboxes = input_images[current_image_index].boundingBoxes
