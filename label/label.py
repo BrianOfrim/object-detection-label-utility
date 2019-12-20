@@ -35,7 +35,7 @@ class Category:
         self.keyboard_string = keyboard_string
         self.ax = None
         self.button = None
-    def selected(self, event):
+    def select(self):
         print('Button pushed: %s' % self.data_name)
         if(self.ax is not None):
             self.ax.spines['left'].set_linewidth(2)
@@ -43,10 +43,24 @@ class Category:
             self.ax.spines['top'].set_linewidth(2)
             self.ax.spines['bottom'].set_linewidth(2)
             
-            self.ax.spines['bottom'].set_color('green')
-            self.ax.spines['top'].set_color('green')
-            self.ax.spines['left'].set_color('green')
-            self.ax.spines['right'].set_color('green')
+            self.ax.spines['bottom'].set_color('#42f545')
+            self.ax.spines['top'].set_color('#42f545')
+            self.ax.spines['left'].set_color('#42f545')
+            self.ax.spines['right'].set_color('#42f545')
+
+    def deselect(self):
+         if(self.ax is not None):
+            self.ax.spines['left'].set_linewidth(None)
+            self.ax.spines['right'].set_linewidth(None)
+            self.ax.spines['top'].set_linewidth(None)
+            self.ax.spines['bottom'].set_linewidth(None)
+            
+            self.ax.spines['bottom'].set_color('black')
+            self.ax.spines['top'].set_color('black')
+            self.ax.spines['left'].set_color('black')
+            self.ax.spines['right'].set_color('black')
+
+       
 
 item_categories = [
     Category('trash', (23, 171, 245), '0'),
@@ -146,6 +160,20 @@ def drawCorner1Lines(bboxCorner):
 
     fig.canvas.draw()
 
+def handle_bbox_entry(event):
+    # get the current bounding box list
+    bboxes = input_images[current_image_index].boundingBoxes
+    if(len(bboxes) > 0 and bboxes[-1].corner2 is None):
+        clearAllLines()
+        bboxes[-1].corner2 = BBoxCorner(math.floor(event.xdata),
+            math.floor(event.ydata))
+        draw_bounding_boxes(bboxes)    
+    else:
+        bboxes.append(BBox(BBoxCorner(
+            math.floor(event.xdata), math.floor(event.ydata)), None, current_category_index))
+        drawCorner1Lines(bboxes[-1].corner1)
+
+
 
 def keypress(event):
     global current_category_index
@@ -174,26 +202,31 @@ def keypress(event):
     # Redraw the figure
     fig.canvas.draw()
 
-def onclick(event):
-    # TODO: handle button clicks 
-
-    # verify that the click was inbounds
-    if event.inaxes is None or event.inaxes != im_ax or\
-            event.xdata is None or event.ydata is None:
-        print('Invalid box corner')
+def handle_click(event):
+    global current_category_index
+    # verify that the click was inbounds for an axes
+    if event.xdata is None or event.ydata is None or event.inaxes is None:
+        print('Invalid selection.')
         return
 
-    # get the current bounding box list
-    bboxes = input_images[current_image_index].boundingBoxes
-    if(len(bboxes) > 0 and bboxes[-1].corner2 is None):
-        clearAllLines()
-        bboxes[-1].corner2 = BBoxCorner(math.floor(event.xdata),
-            math.floor(event.ydata))
-        draw_bounding_boxes(bboxes)    
-    else:
-        bboxes.append(BBox(BBoxCorner(
-            math.floor(event.xdata), math.floor(event.ydata)), None, current_category_index))
-        drawCorner1Lines(bboxes[-1].corner1)
+    if event.inaxes == im_ax:
+        handle_bbox_entry(event)
+        fig.canvas.draw()
+        return
+    
+    for category_index, category in enumerate(item_categories):
+        if event.inaxes == category.ax:
+            # Deselect all buttons
+            [c.deselect() for c in item_categories]
+            # Select the clicked button
+            category.select()
+            current_category_index = category_index
+            return
+
+def on_click(event):
+    handle_click(event)
+    # Redraw the figure
+    fig.canvas.draw()
 
 def main(unused_argv):
     # read in the names of the images to label
@@ -202,12 +235,20 @@ def main(unused_argv):
             input_images.append(AnnotatedImage(
                 os.path.join(flags.FLAGS.input_image_dir, image_file), []))
 
+    if (len(input_images) == 0):
+        print('No input images found')
+        return
+
+    if (len (item_categories) == 0):
+        print('No label categories found')
+        return
+
     axprev = plt.axes([0.8, 0.01, 0.085, 0.075])
     axnext = plt.axes([0.9, 0.01, 0.085, 0.075])
     bprev = Button(axprev, 'Prev')
     bnext = Button(axnext, 'Next')
 
-    cid_onclick= fig.canvas.mpl_connect('button_press_event', onclick)
+    cid_onclick= fig.canvas.mpl_connect('button_press_event', on_click)
     cid_keypress = fig.canvas.mpl_connect('key_press_event', keypress)
     
     bprev.on_clicked(prev_image)
@@ -217,20 +258,14 @@ def main(unused_argv):
         category_item.ax = plt.axes([(item_index * 0.11) + 0.05, 0.01, 0.1, 0.075])
         category_item.button = Button(category_item.ax, category_item.data_name,
                 color=normalize_color(category_item.color))
-        category_item.button.on_clicked(category_item.selected)
-        
-        category_item.ax.spines['left'].set_linewidth(None)
-        category_item.ax.spines['right'].set_linewidth(None)
-        category_item.ax.spines['top'].set_linewidth(None)
-        category_item.ax.spines['bottom'].set_linewidth(None)
-
     
-    if(len(input_images) > 0):
-        displayImage(input_images[current_image_index].path)
-        plt.show()
-        print('Window closed')
-    else:
-        print('No input images to label were found') 
+
+    # Display the first image
+    displayImage(input_images[current_image_index].path)
+    # Select the first category as default
+    item_categories[current_category_index].select()
+    plt.show()
+    print('Window closed')
 
 if __name__ == "__main__":
   app.run(main)
