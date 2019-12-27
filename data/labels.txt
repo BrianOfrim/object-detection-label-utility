@@ -1,0 +1,6 @@
+aluminum
+compost
+glass
+paper
+plastic
+trash

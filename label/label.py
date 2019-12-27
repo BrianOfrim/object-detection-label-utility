@@ -43,6 +43,7 @@ class Category:
             self.ax.spines['top'].set_linewidth(2)
             self.ax.spines['bottom'].set_linewidth(2)
             
+            #self.ax.spines['bottom'].set_color('#42f545')
             self.ax.spines['bottom'].set_color('#42f545')
             self.ax.spines['top'].set_color('#42f545')
             self.ax.spines['left'].set_color('#42f545')
@@ -62,19 +63,18 @@ class Category:
 
        
 
-item_categories = [
-    Category('trash', (23, 171, 245), '0'),
-    Category('aluminum', (237, 181, 14), '1'),
-    Category('compost', (219, 56, 210), '2'),
-    Category('glass', (255, 74, 164), '3'),
-    Category('paper', (230, 245, 24), '4'),
-    Category('plastic', (24, 230, 245), '5'),
-]
+item_categories = []
 
 flags.DEFINE_string(
     'input_image_dir',
     '../data/images',
     'Location of the image files to lable.'
+)
+
+flags.DEFINE_string(
+    'input_labels_dir',
+    '../data/labels.txt',
+    'Path to the file containing the category labels.'
 )
 
 current_category_index = 0
@@ -85,10 +85,6 @@ fig = plt.figure()
 fig.canvas.set_window_title('Label')
 
 im_ax = plt.axes([0.075, 0.15, 0.85, 0.75])
-
-def normalize_color(rgbColor):
-    return tuple(x / 255.0 for x in rgbColor)
-
 
 def next_image(event):
     global current_image_index
@@ -121,7 +117,7 @@ def draw_bounding_boxes(bboxes):
         width = bbox.corner2.x - bbox.corner1.x
         lower_left = (bbox.corner1.x, bbox.corner1.y)
         item_categories[bbox.category_index].color
-        color = normalize_color(item_categories[bbox.category_index].color)
+        color = item_categories[bbox.category_index].color
         rect = patches.Rectangle(lower_left, width, height,
                 linewidth=2,edgecolor=color,facecolor='none')
         im_ax.add_patch(rect)
@@ -229,6 +225,30 @@ def on_click(event):
     fig.canvas.draw()
 
 def main(unused_argv):
+
+    if not os.path.isfile(flags.FLAGS.input_labels_dir):
+        print('Invalid category labels path.')
+        return
+
+    # read in the category labels
+    category_labels = open(flags.FLAGS.input_labels_dir).read().splitlines()
+
+    if (len(category_labels) == 0):
+        print('No label categories found')
+        return
+
+    category_colors = plt.get_cmap('hsv')(
+        np.linspace(0, 0.9, len(category_labels)))
+
+    print(category_colors)
+
+    for index, (name, color) in enumerate(zip(category_labels, category_colors)):
+        item_categories.append(Category(name, tuple(color), str(index)))    
+
+    if not os.path.isdir(flags.FLAGS.input_image_dir):
+        print('Invalid input image directory')
+        return
+
     # read in the names of the images to label
     for image_file in os.listdir(flags.FLAGS.input_image_dir):
         if image_file.endswith(".jpg"):
@@ -237,10 +257,6 @@ def main(unused_argv):
 
     if (len(input_images) == 0):
         print('No input images found')
-        return
-
-    if (len (item_categories) == 0):
-        print('No label categories found')
         return
 
     axprev = plt.axes([0.8, 0.01, 0.085, 0.075])
@@ -257,8 +273,7 @@ def main(unused_argv):
     for item_index, category_item in enumerate(item_categories):
         category_item.ax = plt.axes([(item_index * 0.11) + 0.05, 0.01, 0.1, 0.075])
         category_item.button = Button(category_item.ax, category_item.data_name,
-                color=normalize_color(category_item.color))
-    
+                color=category_item.color)
 
     # Display the first image
     displayImage(input_images[current_image_index].path)
