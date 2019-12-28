@@ -1,16 +1,18 @@
 import os
 import sys
+from dataclasses import dataclass
+import math
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.lines as mlines
 import matplotlib.image as mpimg
 from matplotlib.widgets import Button
-from dataclasses import dataclass
-import math
 from absl import app
 from absl import flags
-
+from PIL import Image
+from pascal_voc_writer import Writer
 
 @dataclass
 class BBoxCorner:
@@ -29,21 +31,20 @@ class AnnotatedImage:
     boundingBoxes: list
 
 class Category:
-    def __init__(self, data_name, color, keyboard_string):
-        self.data_name = data_name
+    def __init__(self, name, color, keyboard_string):
+        self.name = name
         self.color = color
         self.keyboard_string = keyboard_string
         self.ax = None
         self.button = None
     def select(self):
-        print('Button pushed: %s' % self.data_name)
+        print('Button pushed: %s' % self.name)
         if(self.ax is not None):
             self.ax.spines['left'].set_linewidth(2)
             self.ax.spines['right'].set_linewidth(2)
             self.ax.spines['top'].set_linewidth(2)
             self.ax.spines['bottom'].set_linewidth(2)
             
-            #self.ax.spines['bottom'].set_color('#42f545')
             self.ax.spines['bottom'].set_color('#42f545')
             self.ax.spines['top'].set_color('#42f545')
             self.ax.spines['left'].set_color('#42f545')
@@ -60,9 +61,7 @@ class Category:
             self.ax.spines['top'].set_color('black')
             self.ax.spines['left'].set_color('black')
             self.ax.spines['right'].set_color('black')
-
        
-
 item_categories = []
 
 flags.DEFINE_string(
@@ -77,6 +76,12 @@ flags.DEFINE_string(
     'Path to the file containing the category labels.'
 )
 
+flags.DEFINE_string(
+    'output_annotations_dir',
+    '../data/annotations',
+    'Directory to store the output annotations'
+)
+
 current_category_index = 0
 input_images = []
 current_image_index = 0
@@ -86,30 +91,49 @@ fig.canvas.set_window_title('Label')
 
 im_ax = plt.axes([0.075, 0.15, 0.85, 0.75])
 
+def get_base_filename(path):
+    file_name = path.split('/')[-1]
+    return file_name.split('.')[0]
+
+def create_output_dir(dir_name) -> bool:
+    if(not os.path.isdir(dir_name) or not os.path.exists(dir_name)):
+        print('Creating output directory: %s' % dir_name)
+        try:
+            os.makedirs(dir_name)
+        except OSError:
+            print ("Creation of the directory %s failed" % dir_name)
+            return False
+        else:
+            print ("Successfully created the directory %s " % dir_name)
+            return True
+    else:
+        print('Output directory exists.')
+        return True
+
 def next_image(event):
     global current_image_index
     print('Next')
-    removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
-    clearAllLines()
+    remove_incomplete_boxes(input_images[current_image_index].boundingBoxes)
+    clear_all_lines()
     current_image_index += 1
-    displayImage(input_images[current_image_index].path)
+    display_image(input_images[current_image_index].path)
     draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
 
 def prev_image(event):
     global current_image_index
-    clearAllLines()
+    clear_all_lines()
     if (current_image_index == 0):
         print('Already at the start')
     else:
         print('Previous')
-        removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
+        remove_incomplete_boxes(input_images[current_image_index].boundingBoxes)
         current_image_index -= 1
-        displayImage(input_images[current_image_index].path)
+        display_image(input_images[current_image_index].path)
         draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
 
 def draw_bounding_boxes(bboxes):
     # clear all current boxes
-    [p.remove() for p in reversed(im_ax.patches)]
+    [p.remove() for p in reversed(im_ax.patches)] 
     
     # redraw the boxes
     for bbox in bboxes:
@@ -124,13 +148,13 @@ def draw_bounding_boxes(bboxes):
     
     fig.canvas.draw()
 
-def removeInclompleteBoxes(bboxes):
+def remove_incomplete_boxes(bboxes):
     # Clear last bbox if it is incomplete
     for bbox in bboxes:
         if bbox.corner2 is None:
             bboxes.remove(bbox)
 
-def displayImage(path):
+def display_image(path):
     # Load and show the new image
     img = mpimg.imread(path)
     im_ax.imshow(img)
@@ -139,37 +163,47 @@ def displayImage(path):
     # Redraw the figure
     fig.canvas.draw()
 
-def clearAllLines():
+def clear_all_lines():
      [l.remove() for l in reversed(im_ax.lines)]
 
-def drawCorner1Lines(bboxCorner):
+def draw_corner_1_lines(bboxCorner):
     xmin, xmax = im_ax.get_xbound()
     ymin, ymax = im_ax.get_ybound()
     
-    vLine = mlines.Line2D([bboxCorner.x ,bboxCorner.x],
+    vline = mlines.Line2D([bboxCorner.x ,bboxCorner.x],
             [ymin,ymax], linestyle='dashed')
-    hLine = mlines.Line2D([xmin,xmax], 
+    hline = mlines.Line2D([xmin,xmax], 
             [bboxCorner.y,bboxCorner.y], linestyle='dashed')
 
-    im_ax.add_line(vLine)
-    im_ax.add_line(hLine)
+    im_ax.add_line(vline)
+    im_ax.add_line(hline)
 
     fig.canvas.draw()
+
+def format_corners(bbox):
+    xmin = min(bbox.corner1.x, bbox.corner2.x)
+    ymin = min(bbox.corner1.y, bbox.corner2.y)
+    xmax = max(bbox.corner1.x, bbox.corner2.x)
+    ymax = max(bbox.corner1.y, bbox.corner2.y)
+    bbox.corner1.x = xmin
+    bbox.corner1.y = ymin
+    bbox.corner2.x = xmax
+    bbox.corner2.y = ymax
 
 def handle_bbox_entry(event):
     # get the current bounding box list
     bboxes = input_images[current_image_index].boundingBoxes
     if(len(bboxes) > 0 and bboxes[-1].corner2 is None):
-        clearAllLines()
+        clear_all_lines()
         bboxes[-1].corner2 = BBoxCorner(math.floor(event.xdata),
             math.floor(event.ydata))
+        format_corners(bboxes[-1])
         draw_bounding_boxes(bboxes)    
     else:
         bboxes.append(BBox(BBoxCorner(
-            math.floor(event.xdata), math.floor(event.ydata)), None, current_category_index))
-        drawCorner1Lines(bboxes[-1].corner1)
-
-
+            math.floor(event.xdata), math.floor(event.ydata)), None, 
+                current_category_index))
+        draw_corner_1_lines(bboxes[-1].corner1)
 
 def keypress(event):
     global current_category_index
@@ -179,7 +213,7 @@ def keypress(event):
     elif event.key == 'a':
         prev_image(event)
     elif event.key == 'w' or event.key == 'escape':
-        clearAllLines()
+        clear_all_lines()
         if(len(input_images[current_image_index].boundingBoxes) == 0):
             print('No more bounding boxes to clear')
         elif input_images[current_image_index].boundingBoxes[-1].corner2 is None:
@@ -187,14 +221,14 @@ def keypress(event):
         else:
             print('Remove latest bounding box')
             input_images[current_image_index].boundingBoxes.pop()
-        removeInclompleteBoxes(input_images[current_image_index].boundingBoxes)
+        remove_incomplete_boxes(input_images[current_image_index].boundingBoxes)
         draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
 
     for category_index, category in enumerate(item_categories):
         if event.key == category.keyboard_string:
             current_category_index = category_index
             print('Current category: %s' % 
-                    item_categories[current_category_index].data_name)
+                    item_categories[current_category_index].name)
     # Redraw the figure
     fig.canvas.draw()
 
@@ -240,8 +274,6 @@ def main(unused_argv):
     category_colors = plt.get_cmap('hsv')(
         np.linspace(0, 0.9, len(category_labels)))
 
-    print(category_colors)
-
     for index, (name, color) in enumerate(zip(category_labels, category_colors)):
         item_categories.append(Category(name, tuple(color), str(index)))    
 
@@ -259,6 +291,10 @@ def main(unused_argv):
         print('No input images found')
         return
 
+    if not create_output_dir(flags.FLAGS.output_annotations_dir):
+        print('Cannot create output annotations directory.')
+        return
+ 
     axprev = plt.axes([0.8, 0.01, 0.085, 0.075])
     axnext = plt.axes([0.9, 0.01, 0.085, 0.075])
     bprev = Button(axprev, 'Prev')
@@ -272,15 +308,29 @@ def main(unused_argv):
  
     for item_index, category_item in enumerate(item_categories):
         category_item.ax = plt.axes([(item_index * 0.11) + 0.05, 0.01, 0.1, 0.075])
-        category_item.button = Button(category_item.ax, category_item.data_name,
+        category_item.button = Button(category_item.ax, category_item.name,
                 color=category_item.color)
 
     # Display the first image
-    displayImage(input_images[current_image_index].path)
+    display_image(input_images[current_image_index].path)
     # Select the first category as default
     item_categories[current_category_index].select()
     plt.show()
     print('Window closed')
+
+    for i in range(current_image_index + 1):
+        if len(input_images[i].boundingBoxes) == 0:
+            continue
+        path = input_images[i].path
+        width, height = Image.open(path).size
+        print(path, ' Width: ', width, ' Height: ', height)
+        writer = Writer(path, width, height)
+        for bbox in input_images[i].boundingBoxes:
+            writer.addObject(item_categories[bbox.category_index].name,
+                bbox.corner1.x, bbox.corner1.y, bbox.corner2.x, bbox.corner2.y)
+            print('\t', bbox)
+        print(os.path.join(flags.FLAGS.output_annotations_dir,
+            get_base_filename(path) + '.xml'))   
 
 if __name__ == "__main__":
   app.run(main)
