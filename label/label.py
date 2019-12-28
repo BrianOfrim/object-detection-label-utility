@@ -2,6 +2,7 @@ import os
 import sys
 from dataclasses import dataclass
 import math
+from typing import List
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,12 +15,10 @@ from absl import flags
 from PIL import Image
 from pascal_voc_writer import Writer
 
-
 @dataclass
 class BBoxCorner:
     x: int
     y: int
-
 
 @dataclass
 class BBox:
@@ -27,12 +26,33 @@ class BBox:
     corner2: BBoxCorner
     category_index: int
 
-
-@dataclass
 class AnnotatedImage:
-    path: str
-    boundingBoxes: list
+    def __init__(self, path: str, bboxes: List[BBox]):
+        self.path = path
+        self.bboxes = bboxes
 
+    def _get_pascal_voc_filename(self) -> str:
+        return self.path.split("/")[-1].split(".")[0] + ".xml"
+    
+    def write_to_pascal_voc(self) -> None:
+        if len(self.bboxes) == 0:
+            return
+        width, height = Image.open(self.path).size
+        writer = Writer(self.path, width, height)
+        for bbox in self.bboxes:
+            writer.addObject(
+                item_categories[bbox.category_index].name,
+                bbox.corner1.x,
+                bbox.corner1.y,
+                bbox.corner2.x,
+                bbox.corner2.y,
+            )
+        writer.save(
+            os.path.join(
+                flags.FLAGS.output_annotations_dir, 
+                self._get_pascal_voc_filename()
+            )
+        )
 
 class Category:
     def __init__(self, name, color, keyboard_string):
@@ -95,12 +115,6 @@ fig.canvas.set_window_title("Label")
 
 im_ax = plt.axes([0.075, 0.15, 0.85, 0.75])
 
-
-def get_base_filename(path) -> str:
-    file_name = path.split("/")[-1]
-    return file_name.split(".")[0]
-
-
 def create_output_dir(dir_name) -> bool:
     if not os.path.isdir(dir_name) or not os.path.exists(dir_name):
         print("Creating output directory: %s" % dir_name)
@@ -120,11 +134,11 @@ def create_output_dir(dir_name) -> bool:
 def next_image(event) -> None:
     global current_image_index
     print("Next")
-    remove_incomplete_boxes(input_images[current_image_index].boundingBoxes)
+    remove_incomplete_boxes(input_images[current_image_index].bboxes)
     clear_all_lines()
     current_image_index += 1
     display_image(input_images[current_image_index].path)
-    draw_bounding_boxes(input_images[current_image_index].boundingBoxes)
+    draw_bounding_boxes(input_images[current_image_index].bboxes)
 
 
 def prev_image(event) -> None:
@@ -134,11 +148,10 @@ def prev_image(event) -> None:
         print("Already at the start")
     else:
         print("Previous")
-        remove_incomplete_boxes(input_images[current_image_index].boundingBoxes)
+        remove_incomplete_boxes(input_images[current_image_index].bboxes)
         current_image_index -= 1
         display_image(input_images[current_image_index].path)
-        draw_bounding_boxes(input_images[current_image_index].boundingBoxes)
-
+        draw_bounding_boxes(input_images[current_image_index].bboxes)
 
 def draw_bounding_boxes(bboxes) -> None:
     # clear all current boxes
@@ -155,16 +168,13 @@ def draw_bounding_boxes(bboxes) -> None:
             lower_left, width, height, linewidth=2, edgecolor=color, facecolor="none"
         )
         im_ax.add_patch(rect)
-
     fig.canvas.draw()
-
 
 def remove_incomplete_boxes(bboxes) -> None:
     # Clear last bbox if it is incomplete
     for bbox in bboxes:
         if bbox.corner2 is None:
             bboxes.remove(bbox)
-
 
 def display_image(path) -> None:
     # Load and show the new image
@@ -175,10 +185,8 @@ def display_image(path) -> None:
     # Redraw the figure
     fig.canvas.draw()
 
-
 def clear_all_lines() -> None:
     [l.remove() for l in reversed(im_ax.lines)]
-
 
 def draw_corner_1_lines(bboxCorner) -> None:
     xmin, xmax = im_ax.get_xbound()
@@ -207,10 +215,9 @@ def format_corners(bbox) -> None:
     bbox.corner2.x = xmax
     bbox.corner2.y = ymax
 
-
 def handle_bbox_entry(event) -> None:
     # get the current bounding box list
-    bboxes = input_images[current_image_index].boundingBoxes
+    bboxes = input_images[current_image_index].bboxes
     if len(bboxes) > 0 and bboxes[-1].corner2 is None:
         clear_all_lines()
         bboxes[-1].corner2 = BBoxCorner(
@@ -238,15 +245,15 @@ def keypress(event) -> None:
         prev_image(event)
     elif event.key == "w" or event.key == "escape":
         clear_all_lines()
-        if len(input_images[current_image_index].boundingBoxes) == 0:
+        if len(input_images[current_image_index].bboxes) == 0:
             print("No more bounding boxes to clear")
-        elif input_images[current_image_index].boundingBoxes[-1].corner2 is None:
+        elif input_images[current_image_index].bboxes[-1].corner2 is None:
             print("Remove corner 1 guidelines")
         else:
             print("Remove latest bounding box")
-            input_images[current_image_index].boundingBoxes.pop()
-        remove_incomplete_boxes(input_images[current_image_index].boundingBoxes)
-        draw_bounding_boxes(input_images[current_image_index].boundingBoxes)
+            input_images[current_image_index].bboxes.pop()
+        remove_incomplete_boxes(input_images[current_image_index].bboxes)
+        draw_bounding_boxes(input_images[current_image_index].bboxes)
 
     for category_index, category in enumerate(item_categories):
         if event.key == category.keyboard_string:
@@ -348,27 +355,7 @@ def main(unused_argv):
     print("Window closed")
 
     for i in range(current_image_index + 1):
-        if len(input_images[i].boundingBoxes) == 0:
-            continue
-        path = input_images[i].path
-        width, height = Image.open(path).size
-        print(path, " Width: ", width, " Height: ", height)
-        writer = Writer(path, width, height)
-        for bbox in input_images[i].boundingBoxes:
-            writer.addObject(
-                item_categories[bbox.category_index].name,
-                bbox.corner1.x,
-                bbox.corner1.y,
-                bbox.corner2.x,
-                bbox.corner2.y,
-            )
-            print("\t", bbox)
-        writer.save(
-            os.path.join(
-                flags.FLAGS.output_annotations_dir, get_base_filename(path) + ".xml"
-            )
-        )
-
+        input_images[i].write_to_pascal_voc()
 
 if __name__ == "__main__":
     app.run(main)
