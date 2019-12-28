@@ -91,7 +91,7 @@ fig.canvas.set_window_title('Label')
 
 im_ax = plt.axes([0.075, 0.15, 0.85, 0.75])
 
-def get_base_filename(path):
+def get_base_filename(path) -> str:
     file_name = path.split('/')[-1]
     return file_name.split('.')[0]
 
@@ -110,7 +110,7 @@ def create_output_dir(dir_name) -> bool:
         print('Output directory exists.')
         return True
 
-def next_image(event):
+def next_image(event) -> None:
     global current_image_index
     print('Next')
     remove_incomplete_boxes(input_images[current_image_index].boundingBoxes)
@@ -119,7 +119,7 @@ def next_image(event):
     display_image(input_images[current_image_index].path)
     draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
 
-def prev_image(event):
+def prev_image(event) -> None:
     global current_image_index
     clear_all_lines()
     if (current_image_index == 0):
@@ -131,7 +131,7 @@ def prev_image(event):
         display_image(input_images[current_image_index].path)
         draw_bounding_boxes(input_images[current_image_index].boundingBoxes) 
 
-def draw_bounding_boxes(bboxes):
+def draw_bounding_boxes(bboxes) -> None:
     # clear all current boxes
     [p.remove() for p in reversed(im_ax.patches)] 
     
@@ -148,13 +148,13 @@ def draw_bounding_boxes(bboxes):
     
     fig.canvas.draw()
 
-def remove_incomplete_boxes(bboxes):
+def remove_incomplete_boxes(bboxes) -> None:
     # Clear last bbox if it is incomplete
     for bbox in bboxes:
         if bbox.corner2 is None:
             bboxes.remove(bbox)
 
-def display_image(path):
+def display_image(path) -> None:
     # Load and show the new image
     img = mpimg.imread(path)
     im_ax.imshow(img)
@@ -163,10 +163,10 @@ def display_image(path):
     # Redraw the figure
     fig.canvas.draw()
 
-def clear_all_lines():
+def clear_all_lines() -> None:
      [l.remove() for l in reversed(im_ax.lines)]
 
-def draw_corner_1_lines(bboxCorner):
+def draw_corner_1_lines(bboxCorner) -> None:
     xmin, xmax = im_ax.get_xbound()
     ymin, ymax = im_ax.get_ybound()
     
@@ -180,7 +180,7 @@ def draw_corner_1_lines(bboxCorner):
 
     fig.canvas.draw()
 
-def format_corners(bbox):
+def format_corners(bbox) -> None:
     xmin = min(bbox.corner1.x, bbox.corner2.x)
     ymin = min(bbox.corner1.y, bbox.corner2.y)
     xmax = max(bbox.corner1.x, bbox.corner2.x)
@@ -190,7 +190,7 @@ def format_corners(bbox):
     bbox.corner2.x = xmax
     bbox.corner2.y = ymax
 
-def handle_bbox_entry(event):
+def handle_bbox_entry(event) -> None:
     # get the current bounding box list
     bboxes = input_images[current_image_index].boundingBoxes
     if(len(bboxes) > 0 and bboxes[-1].corner2 is None):
@@ -205,7 +205,7 @@ def handle_bbox_entry(event):
                 current_category_index))
         draw_corner_1_lines(bboxes[-1].corner1)
 
-def keypress(event):
+def keypress(event) -> None:
     global current_category_index
     print('press', event.key)
     if event.key == 'd':
@@ -232,7 +232,7 @@ def keypress(event):
     # Redraw the figure
     fig.canvas.draw()
 
-def handle_click(event):
+def handle_click(event) -> None:
     global current_category_index
     # verify that the click was inbounds for an axes
     if event.xdata is None or event.ydata is None or event.inaxes is None:
@@ -253,7 +253,7 @@ def handle_click(event):
             current_category_index = category_index
             return
 
-def on_click(event):
+def on_click(event) -> None:
     handle_click(event)
     # Redraw the figure
     fig.canvas.draw()
@@ -329,7 +329,7 @@ def main(unused_argv):
             writer.addObject(item_categories[bbox.category_index].name,
                 bbox.corner1.x, bbox.corner1.y, bbox.corner2.x, bbox.corner2.y)
             print('\t', bbox)
-        print(os.path.join(flags.FLAGS.output_annotations_dir,
+        writer.save(os.path.join(flags.FLAGS.output_annotations_dir,
             get_base_filename(path) + '.xml'))   
 
 if __name__ == "__main__":
