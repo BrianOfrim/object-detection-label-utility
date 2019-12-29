@@ -1,0 +1,6 @@
+absl-py
+dataclasses
+matplotlib
+numpy
+pascal_voc_writer
+pillow

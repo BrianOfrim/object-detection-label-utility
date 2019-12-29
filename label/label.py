@@ -1,30 +1,31 @@
-import os
-import sys
-from dataclasses import dataclass
 import math
+import os
+from dataclasses import dataclass
 from typing import List
 
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-import matplotlib.lines as mlines
 import matplotlib.image as mpimg
+import matplotlib.lines as mlines
+import matplotlib.patches as patches
+import matplotlib.pyplot as plt
+import numpy as np
+from absl import app, flags
 from matplotlib.widgets import Button
-from absl import app
-from absl import flags
-from PIL import Image
 from pascal_voc_writer import Writer
+from PIL import Image
+
 
 @dataclass
 class BBoxCorner:
     x: int
     y: int
 
+
 @dataclass
 class BBox:
     corner1: BBoxCorner
     corner2: BBoxCorner
     category_index: int
+
 
 class AnnotatedImage:
     def __init__(self, path: str, bboxes: List[BBox]):
@@ -33,7 +34,7 @@ class AnnotatedImage:
 
     def _get_pascal_voc_filename(self) -> str:
         return self.path.split("/")[-1].split(".")[0] + ".xml"
-    
+
     def write_to_pascal_voc(self) -> None:
         if len(self.bboxes) == 0:
             return
@@ -49,10 +50,10 @@ class AnnotatedImage:
             )
         writer.save(
             os.path.join(
-                flags.FLAGS.output_annotations_dir, 
-                self._get_pascal_voc_filename()
+                flags.FLAGS.output_annotations_dir, self._get_pascal_voc_filename()
             )
         )
+
 
 class Category:
     def __init__(self, name, color, keyboard_string):
@@ -88,8 +89,6 @@ class Category:
             self.ax.spines["right"].set_color("black")
 
 
-item_categories = []
-
 flags.DEFINE_string(
     "input_image_dir", "../data/images", "Location of the image files to lable."
 )
@@ -106,7 +105,10 @@ flags.DEFINE_string(
     "Directory to store the output annotations",
 )
 
+# Global variables
+item_categories = []
 current_category_index = 0
+
 input_images = []
 current_image_index = 0
 
@@ -114,6 +116,7 @@ fig = plt.figure()
 fig.canvas.set_window_title("Label")
 
 im_ax = plt.axes([0.075, 0.15, 0.85, 0.75])
+
 
 def create_output_dir(dir_name) -> bool:
     if not os.path.isdir(dir_name) or not os.path.exists(dir_name):
@@ -153,10 +156,10 @@ def prev_image(event) -> None:
         display_image(input_images[current_image_index].path)
         draw_bounding_boxes(input_images[current_image_index].bboxes)
 
+
 def draw_bounding_boxes(bboxes) -> None:
     # clear all current boxes
     [p.remove() for p in reversed(im_ax.patches)]
-
     # redraw the boxes
     for bbox in bboxes:
         height = bbox.corner2.y - bbox.corner1.y
@@ -170,11 +173,13 @@ def draw_bounding_boxes(bboxes) -> None:
         im_ax.add_patch(rect)
     fig.canvas.draw()
 
+
 def remove_incomplete_boxes(bboxes) -> None:
     # Clear last bbox if it is incomplete
     for bbox in bboxes:
         if bbox.corner2 is None:
             bboxes.remove(bbox)
+
 
 def display_image(path) -> None:
     # Load and show the new image
@@ -185,35 +190,35 @@ def display_image(path) -> None:
     # Redraw the figure
     fig.canvas.draw()
 
+
 def clear_all_lines() -> None:
     [l.remove() for l in reversed(im_ax.lines)]
 
+
 def draw_corner_1_lines(bboxCorner) -> None:
-    xmin, xmax = im_ax.get_xbound()
-    ymin, ymax = im_ax.get_ybound()
-
-    vline = mlines.Line2D(
-        [bboxCorner.x, bboxCorner.x], [ymin, ymax], linestyle="dashed"
+    x_min, x_max = im_ax.get_xbound()
+    y_min, y_max = im_ax.get_ybound()
+    v_line = mlines.Line2D(
+        [bboxCorner.x, bboxCorner.x], [y_min, y_max], linestyle="dashed"
     )
-    hline = mlines.Line2D(
-        [xmin, xmax], [bboxCorner.y, bboxCorner.y], linestyle="dashed"
+    h_line = mlines.Line2D(
+        [x_min, x_max], [bboxCorner.y, bboxCorner.y], linestyle="dashed"
     )
-
-    im_ax.add_line(vline)
-    im_ax.add_line(hline)
-
+    im_ax.add_line(v_line)
+    im_ax.add_line(h_line)
     fig.canvas.draw()
 
 
 def format_corners(bbox) -> None:
-    xmin = min(bbox.corner1.x, bbox.corner2.x)
-    ymin = min(bbox.corner1.y, bbox.corner2.y)
-    xmax = max(bbox.corner1.x, bbox.corner2.x)
-    ymax = max(bbox.corner1.y, bbox.corner2.y)
-    bbox.corner1.x = xmin
-    bbox.corner1.y = ymin
-    bbox.corner2.x = xmax
-    bbox.corner2.y = ymax
+    x_min = min(bbox.corner1.x, bbox.corner2.x)
+    y_min = min(bbox.corner1.y, bbox.corner2.y)
+    x_max = max(bbox.corner1.x, bbox.corner2.x)
+    y_max = max(bbox.corner1.y, bbox.corner2.y)
+    bbox.corner1.x = x_min
+    bbox.corner1.y = y_min
+    bbox.corner2.x = x_max
+    bbox.corner2.y = y_max
+
 
 def handle_bbox_entry(event) -> None:
     # get the current bounding box list
@@ -330,16 +335,16 @@ def main(unused_argv):
         print("Cannot create output annotations directory.")
         return
 
-    axprev = plt.axes([0.8, 0.01, 0.085, 0.075])
-    axnext = plt.axes([0.9, 0.01, 0.085, 0.075])
-    bprev = Button(axprev, "Prev")
-    bnext = Button(axnext, "Next")
+    ax_prev = plt.axes([0.8, 0.01, 0.085, 0.075])
+    ax_next = plt.axes([0.9, 0.01, 0.085, 0.075])
+    button_prev = Button(ax_prev, "Prev")
+    button_next = Button(ax_next, "Next")
 
-    cid_onclick = fig.canvas.mpl_connect("button_press_event", on_click)
-    cid_keypress = fig.canvas.mpl_connect("key_press_event", keypress)
+    fig.canvas.mpl_connect("button_press_event", on_click)
+    fig.canvas.mpl_connect("key_press_event", keypress)
 
-    bprev.on_clicked(prev_image)
-    bnext.on_clicked(next_image)
+    button_prev.on_clicked(prev_image)
+    button_next.on_clicked(next_image)
 
     for item_index, category_item in enumerate(item_categories):
         category_item.ax = plt.axes([(item_index * 0.11) + 0.05, 0.01, 0.1, 0.075])
@@ -356,6 +361,7 @@ def main(unused_argv):
 
     for i in range(current_image_index + 1):
         input_images[i].write_to_pascal_voc()
+
 
 if __name__ == "__main__":
     app.run(main)
