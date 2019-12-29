@@ -3,6 +3,9 @@ import os
 from dataclasses import dataclass
 from typing import List
 
+import matplotlib
+
+matplotlib.use("TKAgg")
 import matplotlib.image as mpimg
 import matplotlib.lines as mlines
 import matplotlib.patches as patches
@@ -90,7 +93,7 @@ class Category:
 
 
 flags.DEFINE_string(
-    "input_image_dir", "../data/images", "Location of the image files to lable."
+    "input_image_dir", "../data/images", "Location of the image files to label."
 )
 
 flags.DEFINE_string(
@@ -115,7 +118,18 @@ current_image_index = 0
 fig = plt.figure()
 fig.canvas.set_window_title("Label")
 
-im_ax = plt.axes([0.075, 0.15, 0.85, 0.75])
+im_ax = fig.add_axes([0.075, 0.15, 0.85, 0.75])
+
+
+#  class GUI:
+#     def __init__ (self, fig):
+#         self.fig`= fig
+#         self.categories = List[Category]
+#         self.category_index = 0
+#         self.input_images = List[AnnotatedImage]
+#         self.image_index = 0
+
+#         self.fig.set_window_title("Label")
 
 
 def create_output_dir(dir_name) -> bool:
@@ -162,6 +176,8 @@ def draw_bounding_boxes(bboxes) -> None:
     [p.remove() for p in reversed(im_ax.patches)]
     # redraw the boxes
     for bbox in bboxes:
+        if bbox.corner2 is None:
+            continue
         height = bbox.corner2.y - bbox.corner1.y
         width = bbox.corner2.x - bbox.corner1.x
         lower_left = (bbox.corner1.x, bbox.corner1.y)
@@ -254,10 +270,11 @@ def keypress(event) -> None:
             print("No more bounding boxes to clear")
         elif input_images[current_image_index].bboxes[-1].corner2 is None:
             print("Remove corner 1 guidelines")
+            remove_incomplete_boxes(input_images[current_image_index].bboxes)
         else:
-            print("Remove latest bounding box")
-            input_images[current_image_index].bboxes.pop()
-        remove_incomplete_boxes(input_images[current_image_index].bboxes)
+            print("Remove corner 2")
+            input_images[current_image_index].bboxes[-1].corner2 = None
+            draw_corner_1_lines(input_images[current_image_index].bboxes[-1].corner1)
         draw_bounding_boxes(input_images[current_image_index].bboxes)
 
     for category_index, category in enumerate(item_categories):
