@@ -1,7 +1,7 @@
 import math
 import os
 from dataclasses import dataclass
-from typing import List
+from typing import List, Dict
 
 import matplotlib
 
@@ -43,7 +43,7 @@ class BBoxCorner:
 class BBox:
     corner1: BBoxCorner
     corner2: BBoxCorner
-    category_index: int
+    category: str
 
 
 class AnnotatedImage:
@@ -57,21 +57,21 @@ class AnnotatedImage:
     def write_to_pascal_voc(self) -> None:
         if len(self.bboxes) == 0:
             return
-        # width, height = Image.open(self.path).size
-        # writer = Writer(self.path, width, height)
-        # for bbox in self.bboxes:
-        #     writer.addObject(
-        #         self.categories[bbox.category_index].name,
-        #         bbox.corner1.x,
-        #         bbox.corner1.y,
-        #         bbox.corner2.x,
-        #         bbox.corner2.y,
-        #     )
-        # writer.save(
-        #     os.path.join(
-        #         flags.FLAGS.output_annotations_dir, self._get_pascal_voc_filename()
-        #     )
-        # )
+        width, height = Image.open(self.path).size
+        writer = Writer(self.path, width, height)
+        for bbox in self.bboxes:
+            writer.addObject(
+                bbox.category,
+                bbox.corner1.x,
+                bbox.corner1.y,
+                bbox.corner2.x,
+                bbox.corner2.y,
+            )
+        writer.save(
+            os.path.join(
+                flags.FLAGS.output_annotations_dir, self._get_pascal_voc_filename()
+            )
+        )
 
 
 class Category:
@@ -111,9 +111,9 @@ class Category:
 class GUI:
     def __init__(self, fig):
         self.fig = fig
-        self.categories = []  # List[Category]
-        self.category_index = 0
-        self.images = []  # List[AnnotatedImage]
+        self.categories: Dict[str, Category] = dict()
+        self.current_category = None
+        self.images: List[AnnotatedImage] = []
         self.image_index = 0
         self.fig.canvas.set_window_title("Label")
         self.image_ax = self.fig.add_axes([0.075, 0.15, 0.85, 0.75])
@@ -129,7 +129,8 @@ class GUI:
         # Display the first image
         self._display_image(self.images[self.image_index].path)
         # Select the first category as default
-        self.categories[self.category_index].select()
+        self.current_category = next(iter(self.categories))
+        self.categories[self.current_category].select()
         plt.show()
         print("Closed window")
         for i in range(self.image_index + 1):
@@ -140,7 +141,7 @@ class GUI:
             [(len(self.categories) * 0.11) + 0.05, 0.01, 0.1, 0.075]
         )
         category.button = Button(category.ax, category.name, color=category.color)
-        self.categories.append(category)
+        self.categories[category.name] = category
 
     def add_image(self, image: AnnotatedImage):
         self.images.append(image)
@@ -207,8 +208,7 @@ class GUI:
             height = bbox.corner2.y - bbox.corner1.y
             width = bbox.corner2.x - bbox.corner1.x
             lower_left = (bbox.corner1.x, bbox.corner1.y)
-            self.categories[bbox.category_index].color
-            color = self.categories[bbox.category_index].color
+            color = self.categories[bbox.category].color
             rect = patches.Rectangle(
                 lower_left,
                 width,
@@ -234,7 +234,7 @@ class GUI:
                 BBox(
                     BBoxCorner(math.floor(event.xdata), math.floor(event.ydata)),
                     None,
-                    self.category_index,
+                    self.current_category,
                 )
             )
             self._draw_corner_1_lines(bboxes[-1].corner1)
@@ -250,13 +250,13 @@ class GUI:
         elif event.inaxes == self.prev_ax:
             self._prev_image(event)
         else:
-            for category_index, category in enumerate(self.categories):
+            for category_name, category in self.categories.items():
                 if event.inaxes == category.ax:
+                    self.current_category = category_name
                     # Deselect all buttons
-                    [c.deselect() for c in self.categories]
+                    [c.deselect() for _, c in self.categories.items()]
                     # Select the clicked button
                     category.select()
-                    self.category_index = category_index
                     break
         self.fig.canvas.draw()
 
@@ -281,12 +281,12 @@ class GUI:
                 )
             self._draw_bounding_boxes(self.images[self.image_index].bboxes)
 
-        for index, category in enumerate(self.categories):
+        for category_name, category in self.categories.items():
             if event.key == category.keyboard_string:
-                self.category_index = index
-                print(
-                    "Current category: %s" % self.categories[self.category_index].name
-                )
+                self.current_category = category_name
+                print("Current category: %s" % self.current_category)
+                [c.deselect() for _, c in self.categories.items()]
+                category.select()
         # Redraw the figure
         self.fig.canvas.draw()
 
