@@ -32,6 +32,10 @@ flags.DEFINE_string(
     "Directory to store the output annotations",
 )
 
+# GLOBAL Constants
+INVALID_IMAGE_COLOR = "#f58d42"
+SELECTED_CATEGORY_COLOR = "#42f545"
+
 
 @dataclass
 class BBoxCorner:
@@ -50,12 +54,13 @@ class AnnotatedImage:
     def __init__(self, path: str, bboxes: List[BBox]):
         self.path = path
         self.bboxes = bboxes
+        self.valid = True
 
     def _get_pascal_voc_filename(self) -> str:
         return self.path.split("/")[-1].split(".")[0] + ".xml"
 
     def write_to_pascal_voc(self) -> None:
-        if len(self.bboxes) == 0:
+        if len(self.bboxes) == 0 or not self.valid:
             return
         width, height = Image.open(self.path).size
         writer = Writer(self.path, width, height)
@@ -83,17 +88,16 @@ class Category:
         self.button = None
 
     def select(self):
-        print("Button pushed: %s" % self.name)
         if self.ax is not None:
             self.ax.spines["left"].set_linewidth(2)
             self.ax.spines["right"].set_linewidth(2)
             self.ax.spines["top"].set_linewidth(2)
             self.ax.spines["bottom"].set_linewidth(2)
 
-            self.ax.spines["bottom"].set_color("#42f545")
-            self.ax.spines["top"].set_color("#42f545")
-            self.ax.spines["left"].set_color("#42f545")
-            self.ax.spines["right"].set_color("#42f545")
+            self.ax.spines["bottom"].set_color(SELECTED_CATEGORY_COLOR)
+            self.ax.spines["top"].set_color(SELECTED_CATEGORY_COLOR)
+            self.ax.spines["left"].set_color(SELECTED_CATEGORY_COLOR)
+            self.ax.spines["right"].set_color(SELECTED_CATEGORY_COLOR)
 
     def deselect(self):
         if self.ax is not None:
@@ -116,16 +120,18 @@ class GUI:
         self.images: List[AnnotatedImage] = []
         self.image_index = 0
         self.fig.canvas.set_window_title("Label")
-        self.image_ax = self.fig.add_axes([0.075, 0.15, 0.85, 0.75])
+        self.image_ax = self.fig.add_axes([0.075, 0.25, 0.85, 0.65])
+        self.invalid_ax = self.fig.add_axes([0.7, 0.01, 0.085, 0.075])
         self.prev_ax = self.fig.add_axes([0.8, 0.01, 0.085, 0.075])
         self.next_ax = self.fig.add_axes([0.9, 0.01, 0.085, 0.075])
+        self.invalid_button = Button(self.invalid_ax, "Invalid", color="#f58d42")
         self.prev_button = Button(self.prev_ax, "Prev")
         self.next_button = Button(self.next_ax, "Next")
 
         self.fig.canvas.mpl_connect("button_press_event", self._on_click)
         self.fig.canvas.mpl_connect("key_press_event", self._on_keypress)
 
-    def show(self):
+    def show(self) -> None:
         # Display the first image
         self._display_image(self.images[self.image_index].path)
         # Select the first category as default
@@ -136,14 +142,14 @@ class GUI:
         for i in range(self.image_index + 1):
             self.images[i].write_to_pascal_voc()
 
-    def add_category(self, category: Category):
+    def add_category(self, category: Category) -> None:
         category.ax = self.fig.add_axes(
-            [(len(self.categories) * 0.11) + 0.05, 0.01, 0.1, 0.075]
+            [(len(self.categories) * 0.12) + 0.05, 0.1, 0.11, 0.075]
         )
         category.button = Button(category.ax, category.name, color=category.color)
         self.categories[category.name] = category
 
-    def add_image(self, image: AnnotatedImage):
+    def add_image(self, image: AnnotatedImage) -> None:
         self.images.append(image)
 
     def _remove_incomplete_boxes(self, bboxes) -> None:
@@ -158,23 +164,21 @@ class GUI:
         self.fig.canvas.draw()
 
     def _next_image(self, event) -> None:
-        print("Next")
         self._remove_incomplete_boxes(self.images[self.image_index].bboxes)
         self._clear_all_lines()
         self.image_index += 1
         self._display_image(self.images[self.image_index].path)
         self._draw_bounding_boxes(self.images[self.image_index].bboxes)
+        self._draw_image_border()
 
     def _prev_image(self, event) -> None:
         self._clear_all_lines()
-        if self.image_index == 0:
-            print("Already at the start")
-        else:
-            print("Previous")
+        if self.image_index != 0:
             self._remove_incomplete_boxes(self.images[self.image_index].bboxes)
             self.image_index -= 1
             self._display_image(self.images[self.image_index].path)
             self._draw_bounding_boxes(self.images[self.image_index].bboxes)
+            self._draw_image_border()
 
     def _format_corners(self, bbox) -> None:
         x_min = min(bbox.corner1.x, bbox.corner2.x)
@@ -239,6 +243,42 @@ class GUI:
             )
             self._draw_corner_1_lines(bboxes[-1].corner1)
 
+    def _draw_invalid_image_border(self) -> None:
+        print("invalid boarder")
+        self.image_ax.spines["left"].set_linewidth(5)
+        self.image_ax.spines["right"].set_linewidth(5)
+        self.image_ax.spines["top"].set_linewidth(5)
+        self.image_ax.spines["bottom"].set_linewidth(5)
+
+        self.image_ax.spines["bottom"].set_color(INVALID_IMAGE_COLOR)
+        self.image_ax.spines["top"].set_color(INVALID_IMAGE_COLOR)
+        self.image_ax.spines["left"].set_color(INVALID_IMAGE_COLOR)
+        self.image_ax.spines["right"].set_color(INVALID_IMAGE_COLOR)
+
+    def _draw_valid_image_border(self) -> None:
+        print("Valid boarder")
+        self.image_ax.spines["left"].set_linewidth(None)
+        self.image_ax.spines["right"].set_linewidth(None)
+        self.image_ax.spines["top"].set_linewidth(None)
+        self.image_ax.spines["bottom"].set_linewidth(None)
+
+        self.image_ax.spines["bottom"].set_color("black")
+        self.image_ax.spines["top"].set_color("black")
+        self.image_ax.spines["left"].set_color("black")
+        self.image_ax.spines["right"].set_color("black")
+
+    def _draw_image_border(self):
+        if not self.images[self.image_index].valid:
+            self._draw_invalid_image_border()
+        else:
+            self._draw_valid_image_border()
+
+    def _toggle_image_validation(self, event) -> None:
+        self.images[self.image_index].valid = not self.images[self.image_index].valid
+        self.images[self.image_index].bboxes.clear()
+        self._draw_bounding_boxes(self.images[self.image_index].bboxes)
+        self._draw_image_border()
+
     def _on_click(self, event) -> None:
         # verify that the click was inbounds for an axes
         if event.xdata is None or event.ydata is None or event.inaxes is None:
@@ -249,6 +289,8 @@ class GUI:
             self._next_image(event)
         elif event.inaxes == self.prev_ax:
             self._prev_image(event)
+        elif event.inaxes == self.invalid_ax:
+            self._toggle_image_validation(event)
         else:
             for category_name, category in self.categories.items():
                 if event.inaxes == category.ax:
