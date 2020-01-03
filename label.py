@@ -18,28 +18,29 @@ from pascal_voc_writer import Writer
 from PIL import Image
 
 flags.DEFINE_string(
-    "input_image_dir", "../data/images", "Location of the image files to label."
+    "input_image_dir", "./data/images", "Location of the image files to label."
 )
 
 flags.DEFINE_string(
     "input_labels_dir",
-    "../data/labels.txt",
+    "./data/labels.txt",
     "Path to the file containing the category labels.",
 )
 
 flags.DEFINE_string(
     "output_annotations_dir",
-    "../data/annotations",
+    "./data/annotations",
     "Directory to store the output annotations",
 )
 
 flags.DEFINE_string(
-    "manifest_file", "../data/manifest.txt", "Location of the annotated image manifest"
+    "manifest_file", "./data/manifest.txt", "Location of the annotated image manifest"
 )
 
 # GLOBAL Constants
 INVALID_IMAGE_COLOR = "#f58d42"
 SELECTED_CATEGORY_COLOR = "#42f545"
+BOX_SIDES = ["left", "right", "top", "bottom"]
 
 
 @dataclass
@@ -97,27 +98,16 @@ class Category:
 
     def select(self):
         if self.ax is not None:
-            self.ax.spines["left"].set_linewidth(2)
-            self.ax.spines["right"].set_linewidth(2)
-            self.ax.spines["top"].set_linewidth(2)
-            self.ax.spines["bottom"].set_linewidth(2)
-
-            self.ax.spines["bottom"].set_color(SELECTED_CATEGORY_COLOR)
-            self.ax.spines["top"].set_color(SELECTED_CATEGORY_COLOR)
-            self.ax.spines["left"].set_color(SELECTED_CATEGORY_COLOR)
-            self.ax.spines["right"].set_color(SELECTED_CATEGORY_COLOR)
+            [self.ax.spines[side].set_linewidth(2) for side in BOX_SIDES]
+            [
+                self.ax.spines[side].set_color(SELECTED_CATEGORY_COLOR)
+                for side in BOX_SIDES
+            ]
 
     def deselect(self):
         if self.ax is not None:
-            self.ax.spines["left"].set_linewidth(None)
-            self.ax.spines["right"].set_linewidth(None)
-            self.ax.spines["top"].set_linewidth(None)
-            self.ax.spines["bottom"].set_linewidth(None)
-
-            self.ax.spines["bottom"].set_color("black")
-            self.ax.spines["top"].set_color("black")
-            self.ax.spines["left"].set_color("black")
-            self.ax.spines["right"].set_color("black")
+            [self.ax.spines[side].set_linewidth(None) for side in BOX_SIDES]
+            [self.ax.spines[side].set_color("black") for side in BOX_SIDES]
 
 
 class GUI:
@@ -166,7 +156,7 @@ class GUI:
             open(flags.FLAGS.manifest_file, "a").close()
 
         with open(flags.FLAGS.manifest_file, "a") as manifest:
-            for i in range(self.image_index):
+            for i in range(self.image_index + 1):
                 # Only write files to the manifest if they have lables or are confirmed invalid
                 if self.images[i].valid and len(self.images[i].bboxes) == 0:
                     continue
@@ -195,10 +185,10 @@ class GUI:
     def _next_image(self, event) -> None:
         self._remove_incomplete_boxes(self.images[self.image_index].bboxes)
         self._clear_all_lines()
-        self.image_index += 1
-        if self.image_index == len(self.images):
+        if self.image_index == len(self.images) - 1:
             plt.close()
         else:
+            self.image_index += 1
             self._display_image(self.images[self.image_index].path)
             self._draw_bounding_boxes(self.images[self.image_index].bboxes)
             self._draw_image_border()
@@ -279,26 +269,15 @@ class GUI:
             self._draw_corner_1_lines(bboxes[-1].corner1)
 
     def _draw_invalid_image_border(self) -> None:
-        self.image_ax.spines["left"].set_linewidth(5)
-        self.image_ax.spines["right"].set_linewidth(5)
-        self.image_ax.spines["top"].set_linewidth(5)
-        self.image_ax.spines["bottom"].set_linewidth(5)
-
-        self.image_ax.spines["bottom"].set_color(INVALID_IMAGE_COLOR)
-        self.image_ax.spines["top"].set_color(INVALID_IMAGE_COLOR)
-        self.image_ax.spines["left"].set_color(INVALID_IMAGE_COLOR)
-        self.image_ax.spines["right"].set_color(INVALID_IMAGE_COLOR)
+        [self.image_ax.spines[side].set_linewidth(5) for side in BOX_SIDES]
+        [
+            self.image_ax.spines[side].set_color(INVALID_IMAGE_COLOR)
+            for side in BOX_SIDES
+        ]
 
     def _draw_valid_image_border(self) -> None:
-        self.image_ax.spines["left"].set_linewidth(None)
-        self.image_ax.spines["right"].set_linewidth(None)
-        self.image_ax.spines["top"].set_linewidth(None)
-        self.image_ax.spines["bottom"].set_linewidth(None)
-
-        self.image_ax.spines["bottom"].set_color("black")
-        self.image_ax.spines["top"].set_color("black")
-        self.image_ax.spines["left"].set_color("black")
-        self.image_ax.spines["right"].set_color("black")
+        [self.image_ax.spines[side].set_linewidth(None) for side in BOX_SIDES]
+        [self.image_ax.spines[side].set_color("black") for side in BOX_SIDES]
 
     def _draw_image_border(self):
         if not self.images[self.image_index].valid:
@@ -316,7 +295,7 @@ class GUI:
     def _on_click(self, event) -> None:
         # verify that the click was inbounds for an axes
         if event.xdata is None or event.ydata is None or event.inaxes is None:
-            print("Invalid selection.")
+            return
         elif event.inaxes == self.image_ax:
             self._handle_bbox_entry(event)
         elif event.inaxes == self.next_ax:
