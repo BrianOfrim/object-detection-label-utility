@@ -160,7 +160,9 @@ class GUI:
     def _display_image(self, path) -> None:
         img = Image.open(path)
         self.image_ax.imshow(img)
-        self.image_ax.set_title(path.split("/")[-1])
+        self.image_ax.set_title(
+            "%s [%i/%i]" % (path.split("/")[-1], self.image_index, len(self.images))
+        )
         self.fig.canvas.draw()
 
     def _next_image(self, event) -> None:
@@ -247,7 +249,6 @@ class GUI:
             self._draw_corner_1_lines(bboxes[-1].corner1)
 
     def _draw_invalid_image_border(self) -> None:
-        print("invalid boarder")
         self.image_ax.spines["left"].set_linewidth(5)
         self.image_ax.spines["right"].set_linewidth(5)
         self.image_ax.spines["top"].set_linewidth(5)
@@ -259,7 +260,6 @@ class GUI:
         self.image_ax.spines["right"].set_color(INVALID_IMAGE_COLOR)
 
     def _draw_valid_image_border(self) -> None:
-        print("Valid boarder")
         self.image_ax.spines["left"].set_linewidth(None)
         self.image_ax.spines["right"].set_linewidth(None)
         self.image_ax.spines["top"].set_linewidth(None)
