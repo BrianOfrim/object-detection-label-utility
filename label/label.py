@@ -1,6 +1,7 @@
 import math
 import os
 from dataclasses import dataclass
+import time
 from typing import List, Dict
 
 import matplotlib
@@ -32,6 +33,10 @@ flags.DEFINE_string(
     "Directory to store the output annotations",
 )
 
+flags.DEFINE_string(
+    "manifest_file", "../data/manifest.txt", "Location of the annotated image manifest"
+)
+
 # GLOBAL Constants
 INVALID_IMAGE_COLOR = "#f58d42"
 SELECTED_CATEGORY_COLOR = "#42f545"
@@ -56,8 +61,11 @@ class AnnotatedImage:
         self.bboxes = bboxes
         self.valid = True
 
-    def _get_pascal_voc_filename(self) -> str:
-        return self.path.split("/")[-1].split(".")[0] + ".xml"
+    def get_pascal_voc_filename(self) -> str:
+        if not self.valid:
+            return "Invalid"
+        else:
+            return self.path.split("/")[-1].split(".")[0] + ".xml"
 
     def write_to_pascal_voc(self) -> None:
         if len(self.bboxes) == 0 or not self.valid:
@@ -74,7 +82,7 @@ class AnnotatedImage:
             )
         writer.save(
             os.path.join(
-                flags.FLAGS.output_annotations_dir, self._get_pascal_voc_filename()
+                flags.FLAGS.output_annotations_dir, self.get_pascal_voc_filename()
             )
         )
 
@@ -116,9 +124,10 @@ class GUI:
     def __init__(self, fig):
         self.fig = fig
         self.categories: Dict[str, Category] = dict()
-        self.current_category = None
+        self.current_category: str = None
         self.images: List[AnnotatedImage] = []
-        self.image_index = 0
+        self.startTime: int = time.time()
+        self.image_index: int = 0
         self.fig.canvas.set_window_title("Label")
         self.image_ax = self.fig.add_axes([0.075, 0.25, 0.85, 0.65])
         self.invalid_ax = self.fig.add_axes([0.7, 0.01, 0.085, 0.075])
@@ -139,8 +148,7 @@ class GUI:
         self.categories[self.current_category].select()
         plt.show()
         print("Closed window")
-        for i in range(self.image_index + 1):
-            self.images[i].write_to_pascal_voc()
+        self._save_annotations()
 
     def add_category(self, category: Category) -> None:
         category.ax = self.fig.add_axes(
@@ -152,6 +160,25 @@ class GUI:
     def add_image(self, image: AnnotatedImage) -> None:
         self.images.append(image)
 
+    def _save_annotations(self):
+        # create a manifest file if it does not exit
+        if not os.path.isfile(flags.FLAGS.manifest_file):
+            open(flags.FLAGS.manifest_file, "a").close()
+
+        with open(flags.FLAGS.manifest_file, "a") as manifest:
+            for i in range(self.image_index):
+                # Only write files to the manifest if they have lables or are confirmed invalid
+                if self.images[i].valid and len(self.images[i].bboxes) == 0:
+                    continue
+                self.images[i].write_to_pascal_voc()
+                manifest.write(
+                    "%s,%s\n"
+                    % (
+                        os.path.basename(self.images[i].path),
+                        self.images[i].get_pascal_voc_filename(),
+                    )
+                )
+
     def _remove_incomplete_boxes(self, bboxes) -> None:
         for bbox in bboxes:
             if bbox.corner2 is None:
@@ -161,7 +188,7 @@ class GUI:
         img = Image.open(path)
         self.image_ax.imshow(img)
         self.image_ax.set_title(
-            "%s [%i/%i]" % (path.split("/")[-1], self.image_index, len(self.images))
+            "%s [%i/%i]" % (path.split("/")[-1], self.image_index + 1, len(self.images))
         )
         self.fig.canvas.draw()
 
@@ -169,9 +196,12 @@ class GUI:
         self._remove_incomplete_boxes(self.images[self.image_index].bboxes)
         self._clear_all_lines()
         self.image_index += 1
-        self._display_image(self.images[self.image_index].path)
-        self._draw_bounding_boxes(self.images[self.image_index].bboxes)
-        self._draw_image_border()
+        if self.image_index == len(self.images):
+            plt.close()
+        else:
+            self._display_image(self.images[self.image_index].path)
+            self._draw_bounding_boxes(self.images[self.image_index].bboxes)
+            self._draw_image_border()
 
     def _prev_image(self, event) -> None:
         self._clear_all_lines()
@@ -304,7 +334,9 @@ class GUI:
                     # Select the clicked button
                     category.select()
                     break
-        self.fig.canvas.draw()
+
+        if plt.fignum_exists(self.fig.number):
+            self.fig.canvas.draw()
 
     def _on_keypress(self, event) -> None:
         print("press", event.key)
@@ -333,8 +365,9 @@ class GUI:
                 print("Current category: %s" % self.current_category)
                 [c.deselect() for _, c in self.categories.items()]
                 category.select()
-        # Redraw the figure
-        self.fig.canvas.draw()
+
+        if plt.fignum_exists(self.fig.number):
+            self.fig.canvas.draw()
 
 
 def create_output_dir(dir_name) -> bool:
@@ -378,9 +411,18 @@ def main(unused_argv):
         print("Invalid input image directory")
         return
 
+    manifest_images = set()
+    if os.path.isfile(flags.FLAGS.manifest_file):
+        with open(flags.FLAGS.manifest_file, "r") as manifest:
+            for line in manifest:
+                manifest_images.add(line.split(",")[0].rstrip())
+
     # read in the names of the images to label
     for image_file in os.listdir(flags.FLAGS.input_image_dir):
-        if image_file.endswith(".jpg"):
+        if (
+            image_file.endswith(".jpg")
+            and os.path.basename(image_file) not in manifest_images
+        ):
             gui.add_image(
                 AnnotatedImage(
                     os.path.join(flags.FLAGS.input_image_dir, image_file), []
