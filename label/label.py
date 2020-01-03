@@ -225,6 +225,9 @@ class GUI:
         self.fig.canvas.draw()
 
     def _handle_bbox_entry(self, event) -> None:
+        if not self.images[self.image_index].valid:
+            print("Image marked as invalid. Cannot draw bounding box")
+            return
         bboxes = self.images[self.image_index].bboxes
         if len(bboxes) > 0 and bboxes[-1].corner2 is None:
             self._clear_all_lines()
@@ -276,6 +279,7 @@ class GUI:
     def _toggle_image_validation(self, event) -> None:
         self.images[self.image_index].valid = not self.images[self.image_index].valid
         self.images[self.image_index].bboxes.clear()
+        self._clear_all_lines()
         self._draw_bounding_boxes(self.images[self.image_index].bboxes)
         self._draw_image_border()
 
