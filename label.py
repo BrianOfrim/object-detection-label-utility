@@ -37,11 +37,6 @@ flags.DEFINE_string(
     "manifest_file", "./data/manifest.txt", "Location of the annotated image manifest"
 )
 
-# GLOBAL Constants
-INVALID_IMAGE_COLOR = "#f58d42"
-SELECTED_CATEGORY_COLOR = "#42f545"
-BOX_SIDES = ["left", "right", "top", "bottom"]
-
 
 @dataclass
 class BBoxCorner:
@@ -89,6 +84,10 @@ class AnnotatedImage:
 
 
 class Category:
+    BOX_SIDES = ["left", "right", "top", "bottom"]
+    SELECTED_CATEGORY_COLOR = "#42f545"
+    SELECTED_CATEGORY_BORDER_WIDTH = 2
+
     def __init__(self, name, color, keyboard_string):
         self.name = name
         self.color = color
@@ -98,19 +97,40 @@ class Category:
 
     def select(self):
         if self.ax is not None:
-            [self.ax.spines[side].set_linewidth(2) for side in BOX_SIDES]
-            [
-                self.ax.spines[side].set_color(SELECTED_CATEGORY_COLOR)
-                for side in BOX_SIDES
-            ]
+            for side in self.BOX_SIDES:
+                self.ax.spines[side].set_linewidth(self.SELECTED_CATEGORY_BORDER_WIDTH)
+                self.ax.spines[side].set_color(self.SELECTED_CATEGORY_COLOR)
 
     def deselect(self):
         if self.ax is not None:
-            [self.ax.spines[side].set_linewidth(None) for side in BOX_SIDES]
-            [self.ax.spines[side].set_color("black") for side in BOX_SIDES]
+            for side in self.BOX_SIDES:
+                self.ax.spines[side].set_linewidth(None)
+                self.ax.spines[side].set_color("black")
 
 
 class GUI:
+    INVALID_IMAGE_COLOR = "#f58d42"
+    INVALID_IMAGE_BORDER_WIDTH = 5
+
+    CATEGORY_BUTTON_BOTTOM = 0.1
+    CATEGORY_BUTTON_HEIGHT = 0.075
+    CATEGORY_BUTTON_WIDTH = 0.11
+    CATEGORY_BUTTON_LEFT_MARGIN = 0.025
+    CATEGORY_BUTTON_SPACING = 0.12
+
+    UTILITY_BUTTON_BOTTOM = 0.01
+    UTILITY_BUTTON_HEIGHT = 0.075
+    UTILITY_BUTTON_WIDTH = 0.11
+    UTILITY_BUTTON_RIGHT_MARGIN = 0.975
+    UTILITY_BUTTON_SPACING = 0.12
+
+    IMAGE_BOX_BOTTOM = 0.25
+    IMAGE_BOX_LEFT = 0.075
+    IMAGE_BOX_HEIGHT = 0.65
+    IMAGE_BOX_WIDTH = 0.85
+
+    BOX_SIDES = ["left", "right", "top", "bottom"]
+
     def __init__(self, fig):
         self.fig = fig
         self.categories: Dict[str, Category] = dict()
@@ -119,11 +139,22 @@ class GUI:
         self.startTime: int = time.time()
         self.image_index: int = 0
         self.fig.canvas.set_window_title("Label")
-        self.image_ax = self.fig.add_axes([0.075, 0.25, 0.85, 0.65])
-        self.invalid_ax = self.fig.add_axes([0.7, 0.01, 0.085, 0.075])
-        self.prev_ax = self.fig.add_axes([0.8, 0.01, 0.085, 0.075])
-        self.next_ax = self.fig.add_axes([0.9, 0.01, 0.085, 0.075])
-        self.invalid_button = Button(self.invalid_ax, "Invalid", color="#f58d42")
+        self.image_ax = self.fig.add_axes(
+            [
+                self.IMAGE_BOX_LEFT,
+                self.IMAGE_BOX_BOTTOM,
+                self.IMAGE_BOX_WIDTH,
+                self.IMAGE_BOX_HEIGHT,
+            ]
+        )
+        self.undo_ax = self.fig.add_axes(self._get_utility_ax_rect(3))
+        self.invalid_ax = self.fig.add_axes(self._get_utility_ax_rect(2))
+        self.prev_ax = self.fig.add_axes(self._get_utility_ax_rect(1))
+        self.next_ax = self.fig.add_axes(self._get_utility_ax_rect(0))
+        self.invalid_button = Button(
+            self.invalid_ax, "Invalid", color=self.INVALID_IMAGE_COLOR
+        )
+        self.undo_button = Button(self.undo_ax, "Undo")
         self.prev_button = Button(self.prev_ax, "Prev")
         self.next_button = Button(self.next_ax, "Next")
 
@@ -140,9 +171,27 @@ class GUI:
         print("Closed window")
         self._save_annotations()
 
+    def _get_utility_ax_rect(self, utility_index) -> List[int]:
+        return [
+            self.UTILITY_BUTTON_RIGHT_MARGIN
+            - ((utility_index + 1) * self.UTILITY_BUTTON_SPACING),
+            self.UTILITY_BUTTON_BOTTOM,
+            self.UTILITY_BUTTON_WIDTH,
+            self.UTILITY_BUTTON_HEIGHT,
+        ]
+
+    def _get_category_ax_rect(self, category_index: int) -> List[int]:
+        return [
+            (category_index * self.CATEGORY_BUTTON_SPACING)
+            + self.CATEGORY_BUTTON_LEFT_MARGIN,
+            self.CATEGORY_BUTTON_BOTTOM,
+            self.CATEGORY_BUTTON_WIDTH,
+            self.CATEGORY_BUTTON_HEIGHT,
+        ]
+
     def add_category(self, category: Category) -> None:
         category.ax = self.fig.add_axes(
-            [(len(self.categories) * 0.12) + 0.05, 0.1, 0.11, 0.075]
+            self._get_category_ax_rect(len(self.categories))
         )
         category.button = Button(category.ax, category.name, color=category.color)
         self.categories[category.name] = category
@@ -180,7 +229,7 @@ class GUI:
         self.image_ax.set_title(
             "%s [%i/%i]" % (path.split("/")[-1], self.image_index + 1, len(self.images))
         )
-        self.fig.canvas.draw()
+        self._refresh()
 
     def _next_image(self, event) -> None:
         self._remove_incomplete_boxes(self.images[self.image_index].bboxes)
@@ -222,7 +271,7 @@ class GUI:
         h_line = mlines.Line2D([x_min, x_max], [corner.y, corner.y], linestyle="dashed")
         self.image_ax.add_line(v_line)
         self.image_ax.add_line(h_line)
-        self.fig.canvas.draw()
+        self._refresh()
 
     def _draw_bounding_boxes(self, bboxes) -> None:
         # clear all current boxes
@@ -244,7 +293,7 @@ class GUI:
                 facecolor="none",
             )
             self.image_ax.add_patch(rect)
-        self.fig.canvas.draw()
+        self._refresh()
 
     def _handle_bbox_entry(self, event) -> None:
         if not self.images[self.image_index].valid:
@@ -269,15 +318,14 @@ class GUI:
             self._draw_corner_1_lines(bboxes[-1].corner1)
 
     def _draw_invalid_image_border(self) -> None:
-        [self.image_ax.spines[side].set_linewidth(5) for side in BOX_SIDES]
-        [
-            self.image_ax.spines[side].set_color(INVALID_IMAGE_COLOR)
-            for side in BOX_SIDES
-        ]
+        for side in self.BOX_SIDES:
+            self.image_ax.spines[side].set_linewidth(self.INVALID_IMAGE_BORDER_WIDTH)
+            self.image_ax.spines[side].set_color(self.INVALID_IMAGE_COLOR)
 
     def _draw_valid_image_border(self) -> None:
-        [self.image_ax.spines[side].set_linewidth(None) for side in BOX_SIDES]
-        [self.image_ax.spines[side].set_color("black") for side in BOX_SIDES]
+        for side in self.BOX_SIDES:
+            self.image_ax.spines[side].set_linewidth(None)
+            self.image_ax.spines[side].set_color("black")
 
     def _draw_image_border(self):
         if not self.images[self.image_index].valid:
@@ -292,6 +340,21 @@ class GUI:
         self._draw_bounding_boxes(self.images[self.image_index].bboxes)
         self._draw_image_border()
 
+    def _undo_latest(self, event) -> None:
+        self._clear_all_lines()
+        if len(self.images[self.image_index].bboxes) == 0:
+            print("No more bounding boxes to clear")
+        elif self.images[self.image_index].bboxes[-1].corner2 is None:
+            self._remove_incomplete_boxes(self.images[self.image_index].bboxes)
+        else:
+            self.images[self.image_index].bboxes[-1].corner2 = None
+            self._draw_corner_1_lines(self.images[self.image_index].bboxes[-1].corner1)
+        self._draw_bounding_boxes(self.images[self.image_index].bboxes)
+
+    def _refresh(self) -> None:
+        if plt.fignum_exists(self.fig.number):
+            self.fig.canvas.draw()
+
     def _on_click(self, event) -> None:
         # verify that the click was inbounds for an axes
         if event.xdata is None or event.ydata is None or event.inaxes is None:
@@ -304,18 +367,16 @@ class GUI:
             self._prev_image(event)
         elif event.inaxes == self.invalid_ax:
             self._toggle_image_validation(event)
+        elif event.inaxes == self.undo_ax:
+            self._undo_latest(event)
         else:
             for category_name, category in self.categories.items():
                 if event.inaxes == category.ax:
                     self.current_category = category_name
-                    # Deselect all buttons
                     [c.deselect() for _, c in self.categories.items()]
-                    # Select the clicked button
                     category.select()
                     break
-
-        if plt.fignum_exists(self.fig.number):
-            self.fig.canvas.draw()
+        self._refresh()
 
     def _on_keypress(self, event) -> None:
         print("press", event.key)
@@ -324,29 +385,13 @@ class GUI:
         elif event.key == "a":
             self._prev_image(event)
         elif event.key == "w" or event.key == "escape":
-            self._clear_all_lines()
-            if len(self.images[self.image_index].bboxes) == 0:
-                print("No more bounding boxes to clear")
-            elif self.images[self.image_index].bboxes[-1].corner2 is None:
-                print("Remove corner 1 guidelines")
-                self._remove_incomplete_boxes(self.images[self.image_index].bboxes)
-            else:
-                print("Remove corner 2")
-                self.images[self.image_index].bboxes[-1].corner2 = None
-                self._draw_corner_1_lines(
-                    self.images[self.image_index].bboxes[-1].corner1
-                )
-            self._draw_bounding_boxes(self.images[self.image_index].bboxes)
-
+            self._undo_latest(event)
         for category_name, category in self.categories.items():
             if event.key == category.keyboard_string:
                 self.current_category = category_name
-                print("Current category: %s" % self.current_category)
                 [c.deselect() for _, c in self.categories.items()]
                 category.select()
-
-        if plt.fignum_exists(self.fig.number):
-            self.fig.canvas.draw()
+        self._refresh()
 
 
 def create_output_dir(dir_name) -> bool:
