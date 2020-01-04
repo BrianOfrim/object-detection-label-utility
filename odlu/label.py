@@ -18,23 +18,23 @@ from pascal_voc_writer import Writer
 from PIL import Image
 
 flags.DEFINE_string(
-    "input_image_dir", "../data/images", "Location of the image files to label."
+    "input_image_dir", "./data/images", "Location of the image files to label."
 )
 
 flags.DEFINE_string(
     "input_labels_dir",
-    "../data/labels.txt",
+    "./data/labels.txt",
     "Path to the file containing the category labels.",
 )
 
 flags.DEFINE_string(
     "output_annotations_dir",
-    "../data/annotations",
+    "./data/annotations",
     "Directory to store the output annotations",
 )
 
 flags.DEFINE_string(
-    "manifest_file", "../data/manifest.txt", "Location of the annotated image manifest"
+    "manifest_file", "./data/manifest.txt", "Location of the annotated image manifest"
 )
 
 

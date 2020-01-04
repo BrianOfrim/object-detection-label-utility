@@ -1,2 +1,15 @@
 .vscode/
 data/manifest.txt
+
+# Python files #
+################
+# setup.py working directory
+build
+
+# setup.py dist directory
+dist
+# Egg metadata
+*.egg-info
+.eggs
+# wheel metadata
+pip-wheel-metadata/*
