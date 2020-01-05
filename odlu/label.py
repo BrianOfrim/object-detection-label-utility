@@ -18,23 +18,23 @@ from pascal_voc_writer import Writer
 from PIL import Image
 
 flags.DEFINE_string(
-    "input_image_dir", "./data/images", "Location of the image files to label."
+    "input_image_dir", "../data/images", "Location of the image files to label."
 )
 
 flags.DEFINE_string(
     "input_labels_dir",
-    "./data/labels.txt",
+    "../data/labels.txt",
     "Path to the file containing the category labels.",
 )
 
 flags.DEFINE_string(
     "output_annotations_dir",
-    "./data/annotations",
+    "../data/annotations",
     "Directory to store the output annotations",
 )
 
 flags.DEFINE_string(
-    "manifest_file", "./data/manifest.txt", "Location of the annotated image manifest"
+    "manifest_file", "../data/manifest.txt", "Location of the annotated image manifest"
 )
 
 
@@ -52,22 +52,24 @@ class BBox:
 
 
 class AnnotatedImage:
-    def __init__(self, path: str, bboxes: List[BBox]):
-        self.path = path
-        self.bboxes = bboxes
+    def __init__(self, image_path: str, annotation_base_dir: str):
+        self.image_path = image_path
+        self.annotation_base_dir = annotation_base_dir
+        self.bboxes: List[BBox] = []
         self.valid = True
 
+    # use the base image filename for the output annotation xml file
     def get_pascal_voc_filename(self) -> str:
         if not self.valid:
             return "Invalid"
         else:
-            return self.path.split("/")[-1].split(".")[0] + ".xml"
+            return os.path.basename(self.image_path) + ".xml"
 
     def write_to_pascal_voc(self) -> None:
         if len(self.bboxes) == 0 or not self.valid:
             return
-        width, height = Image.open(self.path).size
-        writer = Writer(self.path, width, height)
+        width, height = Image.open(self.image_path).size
+        writer = Writer(self.image_path, width, height)
         for bbox in self.bboxes:
             writer.addObject(
                 bbox.category,
@@ -77,9 +79,7 @@ class AnnotatedImage:
                 bbox.corner2.y,
             )
         writer.save(
-            os.path.join(
-                flags.FLAGS.output_annotations_dir, self.get_pascal_voc_filename()
-            )
+            os.path.join(self.annotation_base_dir, self.get_pascal_voc_filename())
         )
 
 
@@ -163,13 +163,13 @@ class GUI:
 
     def show(self) -> None:
         # Display the first image
-        self._display_image(self.images[self.image_index].path)
+        self._display_image(self.images[self.image_index].image_path)
         # Select the first category as default
         self.current_category = next(iter(self.categories))
         self.categories[self.current_category].select()
         plt.show()
         print("Closed window")
-        self._save_annotations()
+        return self._get_annotated_images()
 
     def _get_utility_ax_rect(self, utility_index) -> List[int]:
         return [
@@ -199,24 +199,12 @@ class GUI:
     def add_image(self, image: AnnotatedImage) -> None:
         self.images.append(image)
 
-    def _save_annotations(self):
-        # create a manifest file if it does not exit
-        if not os.path.isfile(flags.FLAGS.manifest_file):
-            open(flags.FLAGS.manifest_file, "a").close()
-
-        with open(flags.FLAGS.manifest_file, "a") as manifest:
-            for i in range(self.image_index + 1):
-                # Only write files to the manifest if they have lables or are confirmed invalid
-                if self.images[i].valid and len(self.images[i].bboxes) == 0:
-                    continue
-                self.images[i].write_to_pascal_voc()
-                manifest.write(
-                    "%s,%s\n"
-                    % (
-                        os.path.basename(self.images[i].path),
-                        self.images[i].get_pascal_voc_filename(),
-                    )
-                )
+    def _get_annotated_images(self):
+        return [
+            image
+            for image in self.images[: self.image_index + 1]
+            if len(image.bboxes) > 0 or not image.valid
+        ]
 
     def _remove_incomplete_boxes(self, bboxes) -> None:
         for bbox in bboxes:
@@ -238,7 +226,7 @@ class GUI:
             plt.close()
         else:
             self.image_index += 1
-            self._display_image(self.images[self.image_index].path)
+            self._display_image(self.images[self.image_index].image_path)
             self._draw_bounding_boxes(self.images[self.image_index].bboxes)
             self._draw_image_border()
 
@@ -247,7 +235,7 @@ class GUI:
         if self.image_index != 0:
             self._remove_incomplete_boxes(self.images[self.image_index].bboxes)
             self.image_index -= 1
-            self._display_image(self.images[self.image_index].path)
+            self._display_image(self.images[self.image_index].image_path)
             self._draw_bounding_boxes(self.images[self.image_index].bboxes)
             self._draw_image_border()
 
@@ -410,6 +398,20 @@ def create_output_dir(dir_name) -> bool:
         return True
 
 
+def save_annotations(annotatedImages: List[AnnotatedImage]) -> None:
+    # create a manifest file if it does not exit
+    if not os.path.isfile(flags.FLAGS.manifest_file):
+        open(flags.FLAGS.manifest_file, "a").close()
+
+    with open(flags.FLAGS.manifest_file, "a") as manifest:
+        for image in annotatedImages:
+            image.write_to_pascal_voc()
+            manifest.write(
+                "%s,%s\n"
+                % (os.path.basename(image.image_path), image.get_pascal_voc_filename(),)
+            )
+
+
 def main(unused_argv):
 
     fig = plt.figure()
@@ -449,7 +451,8 @@ def main(unused_argv):
         ):
             gui.add_image(
                 AnnotatedImage(
-                    os.path.join(flags.FLAGS.input_image_dir, image_file), []
+                    os.path.join(flags.FLAGS.input_image_dir, image_file),
+                    flags.FLAGS.output_annotations_dir,
                 )
             )
 
@@ -461,7 +464,8 @@ def main(unused_argv):
         print("Cannot create output annotations directory.")
         return
 
-    gui.show()
+    annotated_images = gui.show()
+    save_annotations(annotated_images)
 
 
 if __name__ == "__main__":
