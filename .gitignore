@@ -1,11 +1,16 @@
+#########################################
+# Editor temporary/working/backup files #
+.#*
 .vscode/
-data/manifest.txt
+
+# Compiled source #
+###################
+*.py[ocd]
 
 # Python files #
 ################
 # setup.py working directory
 build
-
 # setup.py dist directory
 dist
 # Egg metadata
@@ -13,3 +18,7 @@ dist
 .eggs
 # wheel metadata
 pip-wheel-metadata/*
+
+# Application specific data
+data/manifest.txt
+data/labels.txt
