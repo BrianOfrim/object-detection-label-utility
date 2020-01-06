@@ -37,17 +37,20 @@ class AnnotatedImage:
         self.valid = True
 
     # use the base image filename for the output annotation xml file
-    def get_pascal_voc_filename(self) -> str:
+    def _get_pascal_voc_filename(self) -> str:
         if not self.valid:
             return "Invalid"
         else:
             return os.path.basename(self.image_path) + ".xml"
 
-    def write_to_pascal_voc(self) -> None:
+    def write_to_pascal_voc(self) -> str:
         if len(self.bboxes) == 0 or not self.valid:
             return
         width, height = Image.open(self.image_path).size
         writer = Writer(self.image_path, width, height)
+        annotation_path = os.path.join(
+            self.annotation_base_dir, self._get_pascal_voc_filename()
+        )
         for bbox in self.bboxes:
             writer.addObject(
                 bbox.category,
@@ -56,9 +59,8 @@ class AnnotatedImage:
                 bbox.corner2.x,
                 bbox.corner2.y,
             )
-        writer.save(
-            os.path.join(self.annotation_base_dir, self.get_pascal_voc_filename())
-        )
+        writer.save(annotation_path)
+        return annotation_path
 
 
 class Category:

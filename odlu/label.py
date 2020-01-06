@@ -3,6 +3,7 @@ import pathlib
 import re
 import time
 from typing import List
+import shutil
 
 from absl import app, flags
 import numpy as np
@@ -40,7 +41,7 @@ flags.DEFINE_string(
 flags.DEFINE_string("s3_image_dir", "data/images/", "Prefix of the s3 image objects.")
 
 flags.DEFINE_string(
-    "s3_annotations_dir",
+    "s3_annotation_dir",
     "data/annotations/",
     "Prefix of the s3 image annotation objects",
 )
@@ -60,40 +61,73 @@ flags.DEFINE_string("manifest_file_type", "txt", "File type of the manifest file
 def get_files_from_dir(dir_path: str, file_type: str = None) -> List[str]:
     if not os.path.isdir(dir_path):
         return []
-    file_paths = [f for f in os.listdir(dir_path) if os.path.isfile(join(dir_path, f))]
+    file_paths = [
+        f for f in os.listdir(dir_path) if os.path.isfile(os.path.join(dir_path, f))
+    ]
     if file_type is not None:
         file_paths = [f for f in file_paths if f.lower().endswith(file_type.lower())]
     return file_paths
 
 
-# def manifest_file_sort(manifest_file): int:
-#     if re.fi
+def manifest_file_sort(manifest_file) -> int:
+    match = re.match("[0-9]+", manifest_file)
+    if not match:
+        return 0
+    return int(match[0])
 
 
-def get_newest_manifest() -> str:
+def get_newest_manifest_path() -> str:
     manifest_files = get_files_from_dir(flags.FLAGS.local_manifest_dir)
     manifest_files = [
         f for f in manifest_files if f.lower().endswith(flags.FLAGS.manifest_file_type)
     ]
     if len(manifest_files) == 0:
         return None
-    newest_manifest_file = sorted(
-        manifest_files, key=lambda f: int(re.findall("[0-9]+", f)[0]), reverse=True
+    newest_manifest_file = sorted(manifest_files, key=manifest_file_sort, reverse=True)[
+        0
+    ]
+    return os.path.join(flags.FLAGS.local_manifest_dir, newest_manifest_file)
+
+
+def save_annotations(
+    annotatedImages: List[AnnotatedImage],
+    previous_manifest_path: str,
+    start_time: int,
+    use_s3: bool,
+) -> None:
+    # create a new manifest file
+    new_manifest_path = os.path.join(
+        flags.FLAGS.local_manifest_dir,
+        "%i-manifest.%s" % (start_time, flags.FLAGS.manifest_file_type),
     )
+    if previous_manifest_path is not None:
+        shutil.copyfile(previous_manifest_path, new_manifest_path)
+    else:
+        open(new_manifest_path, "a").close()
 
-
-def save_annotations(annotatedImages: List[AnnotatedImage]) -> None:
-    # create a manifest file if it does not exit
-    if not os.path.isfile(flags.FLAGS.manifest_file_path):
-        open(flags.FLAGS.manifest_file_path, "a").close()
-
-    with open(flags.FLAGS.manifest_file_path, "a") as manifest:
+    new_annotation_filepaths = []
+    with open(new_manifest_path, "a") as manifest:
         for image in annotatedImages:
-            image.write_to_pascal_voc()
+            annotation_filepath = image.write_to_pascal_voc()
+            new_annotation_filepaths.append(annotation_filepath)
             manifest.write(
                 "%s,%s\n"
-                % (os.path.basename(image.image_path), image.get_pascal_voc_filename(),)
+                % (
+                    os.path.basename(image.image_path),
+                    os.path.basename(annotation_filepath),
+                )
             )
+    if use_s3:
+        s3_utilities.upload_files(
+            flags.FLAGS.s3_bucket_name,
+            new_annotation_filepaths,
+            flags.FLAGS.s3_annotation_dir,
+        )
+        s3_utilities.upload_files(
+            flags.FLAGS.s3_bucket_name,
+            [new_manifest_path],
+            flags.FLAGS.s3_manifest_dir,
+        )
 
 
 def create_output_dir(dir_name) -> bool:
@@ -187,9 +221,10 @@ def main(unused_argv):
         print("Invalid input image directory")
         return
 
+    previous_manifest_file = get_newest_manifest_path()
     manifest_images = set()
-    if os.path.isfile(flags.FLAGS.manifest_file):
-        with open(flags.FLAGS.manifest_file, "r") as manifest:
+    if previous_manifest_file is not None:
+        with open(previous_manifest_file, "r") as manifest:
             for line in manifest:
                 manifest_images.add(line.split(",")[0].rstrip())
 
@@ -215,7 +250,7 @@ def main(unused_argv):
         return
 
     annotated_images = gui.show()
-    save_annotations(annotated_images)
+    save_annotations(annotated_images, previous_manifest_file, start_time, use_s3)
 
 
 if __name__ == "__main__":
