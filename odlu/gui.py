@@ -1,6 +1,5 @@
 import math
 import os
-import time
 from dataclasses import dataclass
 from typing import Dict, List
 
@@ -115,7 +114,6 @@ class GUI:
         self.categories: Dict[str, Category] = dict()
         self.current_category: str = None
         self.images: List[AnnotatedImage] = []
-        self.startTime: int = time.time()
         self.image_index: int = 0
         self.fig.canvas.set_window_title("Label")
         self.image_ax = self.fig.add_axes(
