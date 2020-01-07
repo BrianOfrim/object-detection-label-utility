@@ -39,7 +39,7 @@ $ python label.py
 ```
 The output annotation files will be saved in **data/annotations/** by default.
 
-The output manifest files generated will have a filename **<unix-timestamp>-manifest.txt**
+The output manifest files generated will have a filename **[UNIX_TIMESTAMP]-manifest.txt**
 Each line in the manifest contains a comma separated list of the image filename, annotation file name. For example:  
 ...  
 image-123.jpg,annotation-abc.xml  
