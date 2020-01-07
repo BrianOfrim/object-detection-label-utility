@@ -46,6 +46,8 @@ image-123.jpg,annotation-abc.xml
 image-456.jpg,annotation-def.xml  
 ...  
 
+When a new manifest file is generated the contents for the previous manifest file is copied into the new file and the new image file, annotation file pair lines are appended to the end of the new file. 
+
 ## Options
 There are various command line options which can be seen by running:
 ```
