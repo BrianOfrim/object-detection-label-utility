@@ -41,7 +41,7 @@ class AnnotatedImage:
         if not self.valid:
             return "Invalid"
         else:
-            return os.path.basename(self.image_path) + ".xml"
+            return os.path.splitext(os.path.basename(self.image_path))[0] + ".xml"
 
     def write_to_pascal_voc(self) -> str:
         if len(self.bboxes) == 0 or not self.valid:
