@@ -129,9 +129,9 @@ def save_outputs(
             flags.FLAGS.s3_manifest_dir,
         )
         # ensure that all images have been uploaded
-        s3_utilities.upload_files(
+        s3_util.upload_files(
             flags.FLAGS.s3_bucket_name,
-            [image.image_path for image in annotatedImages],
+            [image.image_path for image in annotatedImages if image.valid],
             flags.FLAGS.s3_image_dir,
         )
 
