@@ -248,14 +248,19 @@ class GUI:
         self._clear_corner1_lines()
         self._clear_corner2_lines()
 
-    def _draw_corner_1_lines(self, corner) -> None:
-        self.corner1_hline.set_ydata(corner.y)
-        self.corner1_vline.set_xdata(corner.x)
+    def _draw_corner_1_lines(self, x: int, y: int) -> None:
+        self.corner1_hline.set_ydata(y)
+        self.corner1_vline.set_xdata(x)
 
         self.corner1_hline.set_visible(True)
         self.corner1_vline.set_visible(True)
 
-        self._refresh()
+    def _draw_corner_2_lines(self, x: int, y: int) -> None:
+        self.corner2_hline.set_ydata(y)
+        self.corner2_vline.set_xdata(x)
+
+        self.corner2_hline.set_visible(True)
+        self.corner2_vline.set_visible(True)
 
     def _draw_bounding_boxes(self, bboxes) -> None:
         # clear all current boxes
@@ -299,7 +304,7 @@ class GUI:
                     self.current_category,
                 )
             )
-            self._draw_corner_1_lines(bboxes[-1].corner1)
+            self._draw_corner_1_lines(bboxes[-1].corner1.x, bboxes[-1].corner1.y)
 
     def _draw_invalid_image_border(self) -> None:
         for side in self.BOX_SIDES:
@@ -333,7 +338,10 @@ class GUI:
         else:
             # Edit corner 2 of newest bbox
             self.images[self.image_index].bboxes[-1].corner2 = None
-            self._draw_corner_1_lines(self.images[self.image_index].bboxes[-1].corner1)
+            self._draw_corner_1_lines(
+                self.images[self.image_index].bboxes[-1].corner1.x,
+                self.images[self.image_index].bboxes[-1].corner1.y,
+            )
         self._draw_bounding_boxes(self.images[self.image_index].bboxes)
 
     def _refresh(self) -> None:
@@ -379,21 +387,19 @@ class GUI:
 
     def _on_mouse_motion(self, event) -> None:
         if event.inaxes is None or event.inaxes != self.image_ax:
-            return
-
-        if (
-            len(self.images[self.image_index].bboxes) == 0
-            or self.images[self.image_index].bboxes[-1].corner2 is not None
-        ):
-            self.corner1_hline.set_ydata(event.ydata)
-            self.corner1_vline.set_xdata(event.xdata)
-            self.corner1_hline.set_visible(True)
-            self.corner1_vline.set_visible(True)
-
-        elif self.images[self.image_index].bboxes[-1].corner2 is None:
-            self.corner2_hline.set_ydata(event.ydata)
-            self.corner2_vline.set_xdata(event.xdata)
-            self.corner2_hline.set_visible(True)
-            self.corner2_vline.set_visible(True)
-
+            if (
+                len(self.images[self.image_index].bboxes) == 0
+                or self.images[self.image_index].bboxes[-1].corner2 is not None
+            ):
+                self._clear_corner1_lines()
+            elif self.images[self.image_index].bboxes[-1].corner2 is None:
+                self._clear_corner2_lines()
+        else:
+            if (
+                len(self.images[self.image_index].bboxes) == 0
+                or self.images[self.image_index].bboxes[-1].corner2 is not None
+            ):
+                self._draw_corner_1_lines(event.xdata, event.ydata)
+            elif self.images[self.image_index].bboxes[-1].corner2 is None:
+                self._draw_corner_2_lines(event.xdata, event.ydata)
         self._refresh()
