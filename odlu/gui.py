@@ -43,6 +43,11 @@ class AnnotatedImage:
         else:
             return os.path.basename(self.image_path) + ".xml"
 
+    def remove_incomplete_boxes(self) -> None:
+        for bbox in self.bboxes:
+            if bbox.corner2 is None:
+                self.bboxes.remove(bbox)
+
     def write_to_pascal_voc(self) -> str:
         if len(self.bboxes) == 0 or not self.valid:
             return
@@ -51,6 +56,7 @@ class AnnotatedImage:
         annotation_path = os.path.join(
             self.annotation_base_dir, self._get_pascal_voc_filename()
         )
+        self.remove_incomplete_boxes()
         for bbox in self.bboxes:
             writer.addObject(
                 bbox.category,
@@ -126,6 +132,11 @@ class GUI:
                 self.IMAGE_BOX_HEIGHT,
             ]
         )
+        self.corner1_vline = self.image_ax.axvline(linestyle="dashed", visible=False)
+        self.corner1_hline = self.image_ax.axhline(linestyle="dashed", visible=False)
+        self.corner2_vline = self.image_ax.axvline(linestyle="dashed", visible=False)
+        self.corner2_hline = self.image_ax.axhline(linestyle="dashed", visible=False)
+
         self.undo_ax = self.fig.add_axes(self._get_utility_ax_rect(3))
         self.invalid_ax = self.fig.add_axes(self._get_utility_ax_rect(2))
         self.prev_ax = self.fig.add_axes(self._get_utility_ax_rect(1))
@@ -139,6 +150,7 @@ class GUI:
 
         self.fig.canvas.mpl_connect("button_press_event", self._on_click)
         self.fig.canvas.mpl_connect("key_press_event", self._on_keypress)
+        self.fig.canvas.mpl_connect("motion_notify_event", self._on_mouse_motion)
 
     def show(self) -> None:
         # Display the first image
@@ -147,6 +159,7 @@ class GUI:
         self.current_category = next(iter(self.categories))
         self.categories[self.current_category].select()
         plt.show()
+
         print("Closed window")
         return self._get_annotated_images()
 
@@ -178,17 +191,12 @@ class GUI:
     def add_image(self, image: AnnotatedImage) -> None:
         self.images.append(image)
 
-    def _get_annotated_images(self):
+    def _get_annotated_images(self) -> List[AnnotatedImage]:
         return [
             image
             for image in self.images[: self.image_index + 1]
             if len(image.bboxes) > 0 or not image.valid
         ]
-
-    def _remove_incomplete_boxes(self, bboxes) -> None:
-        for bbox in bboxes:
-            if bbox.corner2 is None:
-                bboxes.remove(bbox)
 
     def _display_image(self, path) -> None:
         img = Image.open(path)
@@ -199,7 +207,7 @@ class GUI:
         self._refresh()
 
     def _next_image(self, event) -> None:
-        self._remove_incomplete_boxes(self.images[self.image_index].bboxes)
+        self.images[self.image_index].remove_incomplete_boxes()
         self._clear_all_lines()
         if self.image_index == len(self.images) - 1:
             plt.close()
@@ -212,7 +220,7 @@ class GUI:
     def _prev_image(self, event) -> None:
         self._clear_all_lines()
         if self.image_index != 0:
-            self._remove_incomplete_boxes(self.images[self.image_index].bboxes)
+            self.images[self.image_index].remove_incomplete_boxes()
             self.image_index -= 1
             self._display_image(self.images[self.image_index].image_path)
             self._draw_bounding_boxes(self.images[self.image_index].bboxes)
@@ -228,16 +236,25 @@ class GUI:
         bbox.corner2.x = x_max
         bbox.corner2.y = y_max
 
+    def _clear_corner1_lines(self) -> None:
+        self.corner1_hline.set_visible(False)
+        self.corner1_vline.set_visible(False)
+
+    def _clear_corner2_lines(self) -> None:
+        self.corner2_hline.set_visible(False)
+        self.corner2_vline.set_visible(False)
+
     def _clear_all_lines(self) -> None:
-        [l.remove() for l in reversed(self.image_ax.lines)]
+        self._clear_corner1_lines()
+        self._clear_corner2_lines()
 
     def _draw_corner_1_lines(self, corner) -> None:
-        x_min, x_max = self.image_ax.get_xbound()
-        y_min, y_max = self.image_ax.get_ybound()
-        v_line = mlines.Line2D([corner.x, corner.x], [y_min, y_max], linestyle="dashed")
-        h_line = mlines.Line2D([x_min, x_max], [corner.y, corner.y], linestyle="dashed")
-        self.image_ax.add_line(v_line)
-        self.image_ax.add_line(h_line)
+        self.corner1_hline.set_ydata(corner.y)
+        self.corner1_vline.set_xdata(corner.x)
+
+        self.corner1_hline.set_visible(True)
+        self.corner1_vline.set_visible(True)
+
         self._refresh()
 
     def _draw_bounding_boxes(self, bboxes) -> None:
@@ -312,8 +329,9 @@ class GUI:
         if len(self.images[self.image_index].bboxes) == 0:
             print("No more bounding boxes to clear")
         elif self.images[self.image_index].bboxes[-1].corner2 is None:
-            self._remove_incomplete_boxes(self.images[self.image_index].bboxes)
+            self.images[self.image_index].remove_incomplete_boxes()
         else:
+            # Edit corner 2 of newest bbox
             self.images[self.image_index].bboxes[-1].corner2 = None
             self._draw_corner_1_lines(self.images[self.image_index].bboxes[-1].corner1)
         self._draw_bounding_boxes(self.images[self.image_index].bboxes)
@@ -346,7 +364,6 @@ class GUI:
         self._refresh()
 
     def _on_keypress(self, event) -> None:
-        print("press", event.key)
         if event.key == "d":
             self._next_image(event)
         elif event.key == "a":
@@ -358,4 +375,25 @@ class GUI:
                 self.current_category = category_name
                 [c.deselect() for _, c in self.categories.items()]
                 category.select()
+        self._refresh()
+
+    def _on_mouse_motion(self, event) -> None:
+        if event.inaxes is None or event.inaxes != self.image_ax:
+            return
+
+        if (
+            len(self.images[self.image_index].bboxes) == 0
+            or self.images[self.image_index].bboxes[-1].corner2 is not None
+        ):
+            self.corner1_hline.set_ydata(event.ydata)
+            self.corner1_vline.set_xdata(event.xdata)
+            self.corner1_hline.set_visible(True)
+            self.corner1_vline.set_visible(True)
+
+        elif self.images[self.image_index].bboxes[-1].corner2 is None:
+            self.corner2_hline.set_ydata(event.ydata)
+            self.corner2_vline.set_xdata(event.xdata)
+            self.corner2_hline.set_visible(True)
+            self.corner2_vline.set_visible(True)
+
         self._refresh()

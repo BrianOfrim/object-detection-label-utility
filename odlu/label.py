@@ -89,7 +89,7 @@ def get_newest_manifest_path() -> str:
     return os.path.join(flags.FLAGS.local_manifest_dir, newest_manifest_file)
 
 
-def save_annotations(
+def save_outputs(
     annotatedImages: List[AnnotatedImage],
     previous_manifest_path: str,
     start_time: int,
@@ -127,6 +127,12 @@ def save_annotations(
             flags.FLAGS.s3_bucket_name,
             [new_manifest_path],
             flags.FLAGS.s3_manifest_dir,
+        )
+        # ensure that all images have been uploaded
+        s3_utilities.upload_files(
+            flags.FLAGS.s3_bucket_name,
+            [image.image_path for image in annotatedImages],
+            flags.FLAGS.s3_image_dir,
         )
 
 
@@ -250,7 +256,7 @@ def main(unused_argv):
         return
 
     annotated_images = gui.show()
-    save_annotations(annotated_images, previous_manifest_file, start_time, use_s3)
+    save_outputs(annotated_images, previous_manifest_file, start_time, use_s3)
 
 
 if __name__ == "__main__":

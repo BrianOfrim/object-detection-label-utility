@@ -97,7 +97,10 @@ def file_exists(bucket_name: str, s3_object_path: str) -> None:
 
 
 def upload_files(
-    bucket_name, files_to_send: List[str], s3_destination_object_dir: str
+    bucket_name,
+    files_to_send: List[str],
+    s3_destination_object_dir: str,
+    notify_if_exists: bool = True,
 ) -> None:
     s3 = boto3.client("s3")
     for file_index, file_to_send in enumerate(files_to_send):
@@ -106,15 +109,16 @@ def upload_files(
         )
         try:
             if file_exists(bucket_name, s3_destination_object_path):
-                print(
-                    "S3 object already exists %s:%s, %i/%i"
-                    % (
-                        bucket_name,
-                        s3_destination_object_dir,
-                        file_index + 1,
-                        len(files_to_send),
+                if notify_if_exists:
+                    print(
+                        "S3 object already exists %s:%s, %i/%i"
+                        % (
+                            bucket_name,
+                            s3_destination_object_dir,
+                            file_index + 1,
+                            len(files_to_send),
+                        )
                     )
-                )
                 continue
             s3.upload_file(file_to_send, bucket_name, s3_destination_object_path)
         except botocore.exceptions.ClientError as e:
