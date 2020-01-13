@@ -50,7 +50,7 @@ class AnnotatedImage:
 
     def write_to_pascal_voc(self) -> str:
         if len(self.bboxes) == 0 or not self.valid:
-            return
+            return None
         width, height = Image.open(self.image_path).size
         writer = Writer(self.image_path, width, height)
         annotation_path = os.path.join(
@@ -389,6 +389,7 @@ class GUI:
         if event.inaxes is None or event.inaxes != self.image_ax:
             if (
                 len(self.images[self.image_index].bboxes) == 0
+                or not self.images[self.image_index].valid
                 or self.images[self.image_index].bboxes[-1].corner2 is not None
             ):
                 self._clear_corner1_lines()

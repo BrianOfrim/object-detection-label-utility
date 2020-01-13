@@ -109,14 +109,15 @@ def save_outputs(
     with open(new_manifest_path, "a") as manifest:
         for image in annotatedImages:
             annotation_filepath = image.write_to_pascal_voc()
-            new_annotation_filepaths.append(annotation_filepath)
-            manifest.write(
-                "%s,%s\n"
-                % (
-                    os.path.basename(image.image_path),
-                    os.path.basename(annotation_filepath),
-                )
+            image_filename = os.path.basename(image.image_path)
+            annotation_filename = (
+                os.path.basename(annotation_filepath)
+                if annotation_filepath is not None
+                else "Invalid"
             )
+            if annotation_filepath is not None:
+                new_annotation_filepaths.append(annotation_filepath)
+            manifest.write("%s,%s\n" % (image_filename, annotation_filename,))
     if use_s3:
         s3_util.upload_files(
             flags.FLAGS.s3_bucket_name,
