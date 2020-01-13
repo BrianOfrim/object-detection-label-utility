@@ -9,7 +9,7 @@ from absl import app, flags
 import numpy as np
 import matplotlib.pyplot as plt
 
-import s3_utilities
+import s3_util
 from gui import GUI, AnnotatedImage, Category
 
 flags.DEFINE_string(
@@ -118,12 +118,12 @@ def save_outputs(
                 )
             )
     if use_s3:
-        s3_utilities.upload_files(
+        s3_util.upload_files(
             flags.FLAGS.s3_bucket_name,
             new_annotation_filepaths,
             flags.FLAGS.s3_annotation_dir,
         )
-        s3_utilities.upload_files(
+        s3_util.upload_files(
             flags.FLAGS.s3_bucket_name,
             [new_manifest_path],
             flags.FLAGS.s3_manifest_dir,
@@ -162,7 +162,7 @@ def main(unused_argv):
     use_s3 = True if flags.FLAGS.s3_bucket_name is not None else False
 
     if use_s3:
-        if not s3_utilities.s3_bucket_exists(flags.FLAGS.s3_bucket_name):
+        if not s3_util.s3_bucket_exists(flags.FLAGS.s3_bucket_name):
             use_s3 = False
             print(
                 "Bucket: %s either does not exist or you do not have access to it"
@@ -176,34 +176,34 @@ def main(unused_argv):
 
     if use_s3:
         # Download new images from s3
-        s3_images = s3_utilities.s3_get_object_names_from_dir(
+        s3_images = s3_util.s3_get_object_names_from_dir(
             flags.FLAGS.s3_bucket_name,
             flags.FLAGS.s3_image_dir,
             flags.FLAGS.image_file_type,
         )
-        s3_utilities.s3_download_files(
+        s3_util.s3_download_files(
             flags.FLAGS.s3_bucket_name, s3_images, flags.FLAGS.local_image_dir
         )
 
         # Download any nest annotation files from s3
-        s3_annotations = s3_utilities.s3_get_object_names_from_dir(
+        s3_annotations = s3_util.s3_get_object_names_from_dir(
             flags.FLAGS.s3_bucket_name,
             flags.FLAGS.s3_annotation_dir,
             flags.FLAGS.annotation_file_type,
         )
 
-        s3_utilities.s3_download_files(
+        s3_util.s3_download_files(
             flags.FLAGS.s3_bucket_name,
             s3_annotations,
             flags.FLAGS.local_annotation_dir,
         )
 
         # Download any new manifests files from s3
-        s3_manifests = s3_utilities.s3_get_object_names_from_dir(
+        s3_manifests = s3_util.s3_get_object_names_from_dir(
             flags.FLAGS.s3_bucket_name, flags.FLAGS.s3_manifest_dir,
         )
 
-        s3_utilities.s3_download_files(
+        s3_util.s3_download_files(
             flags.FLAGS.s3_bucket_name, s3_manifests, flags.FLAGS.local_manifest_dir
         )
 
