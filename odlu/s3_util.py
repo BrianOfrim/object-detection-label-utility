@@ -35,7 +35,10 @@ def s3_get_object_names_from_dir(
 
 
 def s3_download_files(
-    bucket_name: str, s3_object_paths: List[str], destination_dir: str
+    bucket_name: str,
+    s3_object_paths: List[str],
+    destination_dir: str,
+    notify_if_exists: bool = False,
 ) -> None:
     s3_client = boto3.client("s3")
     s3_resource = boto3.resource("s3")
@@ -72,15 +75,16 @@ def s3_download_files(
                 )
             )
         else:
-            print(
-                "File already downloaded: %s:%s, %i/%i"
-                % (
-                    object_summary.bucket_name,
-                    object_summary.key,
-                    object_index + 1,
-                    len(object_summary_list),
+            if notify_if_exists:
+                print(
+                    "File already downloaded: %s:%s, %i/%i"
+                    % (
+                        object_summary.bucket_name,
+                        object_summary.key,
+                        object_index + 1,
+                        len(object_summary_list),
+                    )
                 )
-            )
 
 
 def file_exists(bucket_name: str, s3_object_path: str) -> None:
@@ -100,7 +104,7 @@ def upload_files(
     bucket_name,
     files_to_send: List[str],
     s3_destination_object_dir: str,
-    notify_if_exists: bool = True,
+    notify_if_exists: bool = False,
 ) -> None:
     s3 = boto3.client("s3")
     for file_index, file_to_send in enumerate(files_to_send):

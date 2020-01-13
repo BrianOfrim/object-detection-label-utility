@@ -71,8 +71,8 @@ class AnnotatedImage:
 
 class Category:
     BOX_SIDES = ["left", "right", "top", "bottom"]
-    SELECTED_CATEGORY_COLOR = "#42f545"
-    SELECTED_CATEGORY_BORDER_WIDTH = 2
+    SELECTED_CATEGORY_COLOR = "#1bbf3c"
+    SELECTED_CATEGORY_BORDER_WIDTH = 3
 
     def __init__(self, name, color, keyboard_string):
         self.name = name
