@@ -12,6 +12,10 @@ import matplotlib.pyplot as plt
 import s3_util
 from gui import GUI, AnnotatedImage, Category
 
+IMAGE_DIR_NAME = "images"
+ANNOTATION_DIR_NAME = "annotations"
+MANIFEST_DIR_NAME = "manifests"
+
 flags.DEFINE_string(
     "label_file_path",
     "../data/labels.txt",
@@ -19,37 +23,15 @@ flags.DEFINE_string(
 )
 
 flags.DEFINE_string(
-    "local_image_dir", "../data/images", "Local directory of the image files to label."
-)
-
-flags.DEFINE_string(
-    "local_annotation_dir",
-    "../data/annotations",
-    "Local directory of the image annotations",
-)
-
-flags.DEFINE_string(
-    "local_manifest_dir",
-    "../data/manifests/",
-    "Local directory of the annotated image manifests",
+    "local_data_dir", "../data", "Local directory of the image files to label."
 )
 
 flags.DEFINE_string(
     "s3_bucket_name", None, "S3 bucket to retrieve images from and upload manifest to."
 )
 
-flags.DEFINE_string("s3_image_dir", "data/images/", "Prefix of the s3 image objects.")
+flags.DEFINE_string("s3_data_dir", "data", "Prefix of the s3 data objects.")
 
-flags.DEFINE_string(
-    "s3_annotation_dir",
-    "data/annotations/",
-    "Prefix of the s3 image annotation objects",
-)
-flags.DEFINE_string(
-    "s3_manifest_dir",
-    "data/manifests/",
-    "Prefix of the s3 image annotation manifest objects",
-)
 
 flags.DEFINE_string("image_file_type", "jpg", "File type of the image files")
 
@@ -77,7 +59,9 @@ def manifest_file_sort(manifest_file) -> int:
 
 
 def get_newest_manifest_path() -> str:
-    manifest_files = get_files_from_dir(flags.FLAGS.local_manifest_dir)
+    manifest_files = get_files_from_dir(
+        os.path.join(flags.FLAGS.local_data_dir, MANIFEST_DIR_NAME)
+    )
     manifest_files = [
         f for f in manifest_files if f.lower().endswith(flags.FLAGS.manifest_file_type)
     ]
@@ -86,7 +70,9 @@ def get_newest_manifest_path() -> str:
     newest_manifest_file = sorted(manifest_files, key=manifest_file_sort, reverse=True)[
         0
     ]
-    return os.path.join(flags.FLAGS.local_manifest_dir, newest_manifest_file)
+    return os.path.join(
+        flags.FLAGS.local_data_dir, MANIFEST_DIR_NAME, newest_manifest_file
+    )
 
 
 def save_outputs(
@@ -97,7 +83,8 @@ def save_outputs(
 ) -> None:
     # create a new manifest file
     new_manifest_path = os.path.join(
-        flags.FLAGS.local_manifest_dir,
+        flags.FLAGS.local_data_dir,
+        MANIFEST_DIR_NAME,
         "%i-manifest.%s" % (start_time, flags.FLAGS.manifest_file_type),
     )
     if previous_manifest_path is not None:
@@ -122,18 +109,18 @@ def save_outputs(
         s3_util.upload_files(
             flags.FLAGS.s3_bucket_name,
             new_annotation_filepaths,
-            flags.FLAGS.s3_annotation_dir,
+            flags.FLAGS.s3_data_dir + "/" + ANNOTATION_DIR_NAME,
         )
         s3_util.upload_files(
             flags.FLAGS.s3_bucket_name,
             [new_manifest_path],
-            flags.FLAGS.s3_manifest_dir,
+            flags.FLAGS.s3_data_dir + "/" + MANIFEST_DIR_NAME,
         )
         # ensure that all images have been uploaded
         s3_util.upload_files(
             flags.FLAGS.s3_bucket_name,
-            [image.image_path for image in annotatedImages if image.valid],
-            flags.FLAGS.s3_image_dir,
+            [image.image_path for image in annotatedImages],
+            flags.FLAGS.s3_data_dir + "/" + IMAGE_DIR_NAME,
         )
 
 
@@ -149,7 +136,6 @@ def create_output_dir(dir_name) -> bool:
             print("Successfully created the directory %s " % dir_name)
             return True
     else:
-        print("Output directory exists.")
         return True
 
 
@@ -179,33 +165,38 @@ def main(unused_argv):
         # Download new images from s3
         s3_images = s3_util.s3_get_object_names_from_dir(
             flags.FLAGS.s3_bucket_name,
-            flags.FLAGS.s3_image_dir,
+            flags.FLAGS.s3_data_dir + "/" + IMAGE_DIR_NAME,
             flags.FLAGS.image_file_type,
         )
         s3_util.s3_download_files(
-            flags.FLAGS.s3_bucket_name, s3_images, flags.FLAGS.local_image_dir
+            flags.FLAGS.s3_bucket_name,
+            s3_images,
+            os.path.join(flags.FLAGS.local_data_dir, IMAGE_DIR_NAME),
         )
 
         # Download any nest annotation files from s3
         s3_annotations = s3_util.s3_get_object_names_from_dir(
             flags.FLAGS.s3_bucket_name,
-            flags.FLAGS.s3_annotation_dir,
+            flags.FLAGS.s3_data_dir + "/" + ANNOTATION_DIR_NAME,
             flags.FLAGS.annotation_file_type,
         )
 
         s3_util.s3_download_files(
             flags.FLAGS.s3_bucket_name,
             s3_annotations,
-            flags.FLAGS.local_annotation_dir,
+            os.path.join(flags.FLAGS.local_data_dir, ANNOTATION_DIR_NAME),
         )
 
         # Download any new manifests files from s3
         s3_manifests = s3_util.s3_get_object_names_from_dir(
-            flags.FLAGS.s3_bucket_name, flags.FLAGS.s3_manifest_dir,
+            flags.FLAGS.s3_bucket_name,
+            flags.FLAGS.s3_data_dir + "/" + MANIFEST_DIR_NAME,
         )
 
         s3_util.s3_download_files(
-            flags.FLAGS.s3_bucket_name, s3_manifests, flags.FLAGS.local_manifest_dir
+            flags.FLAGS.s3_bucket_name,
+            s3_manifests,
+            os.path.join(flags.FLAGS.local_data_dir, MANIFEST_DIR_NAME),
         )
 
     if not os.path.isfile(flags.FLAGS.label_file_path):
@@ -224,7 +215,7 @@ def main(unused_argv):
     for index, (name, color) in enumerate(zip(category_labels, category_colors)):
         gui.add_category(Category(name, tuple(color), str(index)))
 
-    if not os.path.isdir(flags.FLAGS.local_image_dir):
+    if not os.path.isdir(os.path.join(flags.FLAGS.local_data_dir, IMAGE_DIR_NAME)):
         print("Invalid input image directory")
         return
 
@@ -236,15 +227,19 @@ def main(unused_argv):
                 manifest_images.add(line.split(",")[0].rstrip())
 
     # read in the names of the images to label
-    for image_file in os.listdir(flags.FLAGS.local_image_dir):
+    for image_file in os.listdir(
+        os.path.join(flags.FLAGS.local_data_dir, IMAGE_DIR_NAME)
+    ):
         if (
             image_file.endswith(flags.FLAGS.image_file_type)
             and os.path.basename(image_file) not in manifest_images
         ):
             gui.add_image(
                 AnnotatedImage(
-                    os.path.join(flags.FLAGS.local_image_dir, image_file),
-                    flags.FLAGS.local_annotation_dir,
+                    os.path.join(
+                        flags.FLAGS.local_data_dir, IMAGE_DIR_NAME, image_file
+                    ),
+                    os.path.join(flags.FLAGS.local_data_dir, ANNOTATION_DIR_NAME),
                 )
             )
 
@@ -252,8 +247,16 @@ def main(unused_argv):
         print("No input images found")
         return
 
-    if not create_output_dir(flags.FLAGS.local_annotation_dir):
+    if not create_output_dir(
+        os.path.join(flags.FLAGS.local_data_dir, ANNOTATION_DIR_NAME)
+    ):
         print("Cannot create output annotations directory.")
+        return
+
+    if not create_output_dir(
+        os.path.join(flags.FLAGS.local_data_dir, MANIFEST_DIR_NAME)
+    ):
+        print("Cannot create output manifests directory")
         return
 
     annotated_images = gui.show()
