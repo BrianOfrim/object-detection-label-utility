@@ -1,6 +1,6 @@
 # Object detection label utility
 
-** This project is now deprecated, it's functionality has been added to https://github.com/BrianOfrim/boja **
+**This project is now deprecated, it's functionality has been added to https://github.com/BrianOfrim/boja**
 
 A matplotlib based GUI utility for annotating images with labels and bounding boxes.
 
